@@ -1,0 +1,363 @@
+"""Shared calculation helpers for web (Streamlit) and desktop (tkinter) test UIs."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import pandas as pd
+
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from hydro_engine.read_data import read_station_data
+from hydro_engine.core.forcing import ForcingData, ForcingKind, parse_forcing_kind
+from hydro_engine.core.timeseries import TimeSeries
+def read_config(path: str) -> Dict[str, Any]:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def load_csv(path: str) -> pd.DataFrame:
+    # Current default: local file backend. DB/API backends are reserved in data_reader.py.
+    return read_station_data(path, source_type="file")
+
+
+def build_times(context_start: datetime, step, count: int) -> pd.DatetimeIndex:
+    return pd.DatetimeIndex([context_start + step * i for i in range(count)])
+
+
+def extract_station_series(
+    df: pd.DataFrame,
+    station_id: str,
+    times: pd.DatetimeIndex,
+    *,
+    value_col: str,
+    fill_mode: str,
+) -> List[float]:
+    if value_col not in df.columns:
+        raise ValueError(f"CSV missing value column '{value_col}'")
+
+    sub = df[df["SENID"] == str(station_id)].copy()
+    if sub.empty:
+        if fill_mode == "zero":
+            return [0.0] * len(times)
+        raise ValueError(f"Station {station_id} not found in CSV")
+
+    sub[value_col] = pd.to_numeric(sub[value_col], errors="coerce")
+    sub = sub.dropna(subset=["TIME_DT"]).sort_values("TIME_DT")
+    if sub.empty:
+        if fill_mode == "zero":
+            return [0.0] * len(times)
+        raise ValueError(f"Station {station_id} has no valid time rows")
+
+    s = sub.groupby("TIME_DT")[value_col].mean().sort_index()
+    s = s.reindex(times)
+
+    if fill_mode == "zero":
+        s = s.fillna(0.0)
+    elif fill_mode == "interp":
+        s = s.interpolate(method="time").ffill().bfill().fillna(0.0)
+    else:
+        raise ValueError(f"Unsupported fill_mode: {fill_mode}")
+
+    return [float(x) for x in s.to_list()]
+
+
+def iter_variable_specs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if spec.get("variables") is not None:
+        return list(spec["variables"])
+    return []
+
+
+def build_station_packages(
+    binding_specs: List[Dict[str, Any]],
+    rain_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+    start_time: datetime,
+    time_step,
+) -> Tuple[Dict[str, ForcingData], List[str]]:
+    station_kind_values: Dict[str, Dict[ForcingKind, List[float]]] = {}
+    warnings: List[str] = []
+
+    for spec in binding_specs:
+        for var in iter_variable_specs(spec):
+            kind = parse_forcing_kind(str(var.get("kind") or var.get("forcing_kind")))
+            use_station = True
+            if kind is ForcingKind.POTENTIAL_EVAPOTRANSPIRATION:
+                use_station = bool(var.get("use_station_pet", True))
+            if not use_station:
+                continue
+
+            stations = var.get("stations") or []
+            for st_item in stations:
+                sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+                if not sid:
+                    continue
+
+                value_col = "V" if kind is ForcingKind.PRECIPITATION else "V"
+                try:
+                    values = extract_station_series(
+                        rain_df,
+                        sid,
+                        times,
+                        value_col=value_col,
+                        fill_mode="zero",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"站点 {sid} 读取失败（{kind.value}）: {exc}")
+                    values = [0.0] * len(times)
+
+                station_kind_values.setdefault(sid, {})[kind] = values
+
+    station_packages: Dict[str, ForcingData] = {}
+    for sid, kv in station_kind_values.items():
+        pairs = [
+            (k, TimeSeries(start_time=start_time, time_step=time_step, values=v))
+            for k, v in kv.items()
+        ]
+        station_packages[sid] = ForcingData.from_pairs(pairs)
+    return station_packages, warnings
+
+
+def build_observed_flows(
+    scheme,
+    flow_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+    start_time: datetime,
+    time_step,
+) -> Tuple[Dict[str, TimeSeries], List[str]]:
+    station_ids = set()
+    for node in scheme.nodes.values():
+        for sid in (
+            getattr(node, "observed_station_id", ""),
+            getattr(node, "observed_inflow_station_id", ""),
+        ):
+            if str(sid).strip():
+                station_ids.add(str(sid).strip())
+
+    out: Dict[str, TimeSeries] = {}
+    warnings: List[str] = []
+    for sid in sorted(station_ids):
+        try:
+            vals = extract_station_series(
+                flow_df,
+                sid,
+                times,
+                value_col="AVGV",
+                fill_mode="interp",
+            )
+            out[sid] = TimeSeries(start_time=start_time, time_step=time_step, values=vals)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"流量站 {sid} 读取失败: {exc}")
+    return out, warnings
+
+
+def write_temp_config_with_periods(
+    config_path: str,
+    *,
+    time_type: str,
+    step_size: int,
+    warmup_steps: int,
+    correction_steps: int,
+    historical_steps: int,
+    forecast_steps: int,
+) -> str:
+    data = read_config(config_path)
+    if not data.get("schemes"):
+        raise ValueError("配置缺少 schemes")
+    target = None
+    for s in data["schemes"]:
+        if str(s.get("time_type")) == str(time_type) and int(s.get("step_size")) == int(step_size):
+            target = s
+            break
+    if target is None:
+        raise ValueError(f"未找到匹配方案：time_type={time_type}, step_size={step_size}")
+
+    target["time_axis"] = {
+        "warmup_period_steps": int(warmup_steps),
+        "correction_period_steps": int(correction_steps),
+        "historical_display_period_steps": int(historical_steps),
+        "forecast_period_steps": int(forecast_steps),
+    }
+
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(data, tmp, ensure_ascii=False, indent=2)
+    tmp.close()
+    return tmp.name
+
+
+def build_catchment_precip_series(
+    binding_specs: List[Dict[str, Any]],
+    rain_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+) -> Tuple[Dict[str, List[float]], List[str]]:
+    """Build catchment areal precipitation from weighted station bindings."""
+    out: Dict[str, List[float]] = {}
+    warnings: List[str] = []
+
+    for spec in binding_specs:
+        catchment_id = str(spec.get("catchment_id") or "").strip()
+        if not catchment_id:
+            continue
+        precip_var = None
+        for var in iter_variable_specs(spec):
+            kind = parse_forcing_kind(str(var.get("kind") or var.get("forcing_kind")))
+            if kind is ForcingKind.PRECIPITATION:
+                precip_var = var
+                break
+        if precip_var is None:
+            continue
+
+        stations = precip_var.get("stations") or []
+        if not stations:
+            out[catchment_id] = [0.0] * len(times)
+            continue
+
+        weighted_sum = [0.0] * len(times)
+        weight_total = 0.0
+        valid_station_count = 0
+        for st_item in stations:
+            sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+            if not sid:
+                continue
+            try:
+                series = extract_station_series(
+                    rain_df,
+                    sid,
+                    times,
+                    value_col="V",
+                    fill_mode="zero",
+                )
+                w = float(st_item.get("weight", 1.0))
+                valid_station_count += 1
+                if w > 0:
+                    weight_total += w
+                    for i, v in enumerate(series):
+                        weighted_sum[i] += w * v
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"流域 {catchment_id} 雨量站 {sid} 读取失败: {exc}")
+
+        if weight_total > 0:
+            out[catchment_id] = [v / weight_total for v in weighted_sum]
+        elif valid_station_count > 0:
+            # fallback: arithmetic mean when all weights are missing/invalid
+            # (re-read with equal weights to keep logic explicit and stable)
+            eq_sum = [0.0] * len(times)
+            count = 0
+            for st_item in stations:
+                sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+                if not sid:
+                    continue
+                try:
+                    series = extract_station_series(
+                        rain_df,
+                        sid,
+                        times,
+                        value_col="V",
+                        fill_mode="zero",
+                    )
+                    count += 1
+                    for i, v in enumerate(series):
+                        eq_sum[i] += v
+                except Exception:
+                    pass
+            out[catchment_id] = [v / max(count, 1) for v in eq_sum]
+        else:
+            out[catchment_id] = [0.0] * len(times)
+    return out, warnings
+
+
+def _guess_catchment_area(catchment_obj: Any) -> float:
+    runoff_model = getattr(catchment_obj, "runoff_model", None)
+    if runoff_model is None:
+        return 1.0
+    for attr in ("area",):
+        v = getattr(runoff_model, attr, None)
+        if v is not None:
+            try:
+                fv = float(v)
+                if fv > 0:
+                    return fv
+            except Exception:
+                pass
+    params = getattr(runoff_model, "params", None)
+    if isinstance(params, dict):
+        try:
+            fv = float(params.get("area", 1.0))
+            if fv > 0:
+                return fv
+        except Exception:
+            pass
+    return 1.0
+
+
+def build_node_precip_series(
+    scheme: Any,
+    catchment_precip: Dict[str, List[float]],
+) -> Dict[str, List[float]]:
+    """Aggregate catchment precipitation to node precipitation (area-weighted)."""
+    out: Dict[str, List[float]] = {}
+    for node_id, node in scheme.nodes.items():
+        cids = list(getattr(node, "local_catchment_ids", []) or [])
+        if not cids:
+            continue
+        length = 0
+        for cid in cids:
+            if cid in catchment_precip:
+                length = len(catchment_precip[cid])
+                break
+        if length == 0:
+            continue
+
+        acc = [0.0] * length
+        area_total = 0.0
+        for cid in cids:
+            if cid not in catchment_precip:
+                continue
+            catchment_obj = scheme.catchments.get(cid)
+            area = _guess_catchment_area(catchment_obj)
+            area_total += area
+            vals = catchment_precip[cid]
+            for i, v in enumerate(vals):
+                acc[i] += area * v
+        if area_total > 0:
+            out[str(node_id)] = [v / area_total for v in acc]
+        else:
+            out[str(node_id)] = [0.0] * length
+    return out
+
+
+def build_node_observed_flow_series(
+    scheme: Any,
+    observed_flows: Dict[str, TimeSeries],
+) -> Dict[str, List[float]]:
+    out: Dict[str, List[float]] = {}
+    for node_id, node in scheme.nodes.items():
+        sid_candidates = [
+            str(getattr(node, "observed_inflow_station_id", "")).strip(),
+            str(getattr(node, "observed_station_id", "")).strip(),
+            str(getattr(node, "inflow_station_id", "")).strip(),
+        ]
+        sid = next((x for x in sid_candidates if x), "")
+        if sid and sid in observed_flows:
+            out[str(node_id)] = list(observed_flows[sid].values)
+    return out
+
+
+def build_catchment_observed_flow_series(
+    scheme: Any,
+    node_observed: Dict[str, List[float]],
+) -> Dict[str, List[float]]:
+    """Map catchment observed flow to its downstream node observed inflow."""
+    out: Dict[str, List[float]] = {}
+    for cid, catchment in scheme.catchments.items():
+        dnid = str(getattr(catchment, "downstream_node_id", "")).strip()
+        if dnid and dnid in node_observed:
+            out[str(cid)] = list(node_observed[dnid])
+    return out

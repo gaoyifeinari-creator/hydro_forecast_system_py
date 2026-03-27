@@ -1,0 +1,361 @@
+{
+  "metadata": {
+    "name": "national_flood_demo_y_shape",
+    "description": "Y字型流域 + 水库 + 分洪道示例；日历起点由 API 参数 warmup_start_time 传入，不在此文件配置"
+  },
+  "schemes": [
+    {
+      "time_type": "Hour",
+      "step_size": 1,
+      "time_axis": {
+        "warmup_period_steps": 0,
+        "correction_period_steps": 0,
+        "historical_display_period_steps": 0,
+        "forecast_period_steps": 5
+      },
+      "nodes": [
+        {
+          "id": "N1",
+          "name": "上游常规节点1",
+          "type": "cross_section",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": ["R1"],
+          "local_catchment_ids": ["CA"],
+          "station_binding": {
+            "flow_station_id": "ST_FLOW_N1",
+            "stage_station_id": "ST_LEVEL_N1"
+          },
+          "use_observed_for_routing": true,
+          "enable_observed_correction": true,
+          "correction_config": {
+            "updater_model": {
+              "name": "AR1ErrorUpdater",
+              "params": { "decay_factor": 0.8 }
+            }
+          }
+        },
+        {
+          "id": "N2",
+          "name": "上游常规节点2",
+          "type": "cross_section",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": ["R2"],
+          "local_catchment_ids": ["CB"]
+          ,
+          "station_binding": {
+            "flow_station_id": "ST_FLOW_N2",
+            "stage_station_id": "ST_LEVEL_N2"
+          }
+        },
+        {
+          "id": "N3",
+          "name": "水库节点3",
+          "type": "reservoir",
+          "incoming_reach_ids": ["R1", "R2"],
+          "outgoing_reach_ids": ["R3"],
+          "local_catchment_ids": [],
+          "station_binding": {
+            "inflow_station_id": "ST_IN_N3",
+            "outflow_station_id": "ST_OUT_N3",
+            "stage_station_id": "ST_LEVEL_N3"
+          },
+          "params": {
+            "inflow_attenuation": 1.0,
+            "level_features": {
+              "dead_level": 235.0,
+              "normal_level": 255.0,
+              "flood_limit_level": 258.0,
+              "check_flood_level": 262.0
+            },
+            "operation_constraints": {
+              "min_release": 20.0,
+              "max_release": 500.0
+            },
+            "curves": [
+              {
+                "name": "level_storage_curve",
+                "direction": "level_to_storage",
+                "points": [
+                  { "x": 235.0, "y": 1.2e8 },
+                  { "x": 245.0, "y": 2.5e8 },
+                  { "x": 255.0, "y": 4.2e8 },
+                  { "x": 262.0, "y": 5.8e8 }
+                ]
+              },
+              {
+                "name": "tailwater_discharge_curve",
+                "direction": "discharge_to_tailwater",
+                "points": [
+                  { "x": 50.0, "y": 180.2 },
+                  { "x": 200.0, "y": 181.1 },
+                  { "x": 400.0, "y": 182.0 },
+                  { "x": 600.0, "y": 182.8 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "N4",
+          "name": "分流节点4",
+          "type": "diversion",
+          "incoming_reach_ids": ["R3"],
+          "outgoing_reach_ids": ["R4", "R5"],
+          "local_catchment_ids": [],
+          "station_binding": {
+            "flow_station_id": "ST_FLOW_N4",
+            "stage_station_id": "ST_LEVEL_N4"
+          },
+          "params": {
+            "main_channel_id": "R4",
+            "bypass_channel_id": "R5",
+            "main_channel_capacity": 30.0
+          }
+        },
+        {
+          "id": "N5",
+          "name": "总出口节点5",
+          "type": "cross_section",
+          "incoming_reach_ids": ["R4"],
+          "outgoing_reach_ids": [],
+          "local_catchment_ids": [],
+          "station_binding": {
+            "flow_station_id": "ST_FLOW_N5",
+            "stage_station_id": "ST_LEVEL_N5"
+          }
+        },
+        {
+          "id": "N6",
+          "name": "蓄滞洪区节点6",
+          "type": "cross_section",
+          "incoming_reach_ids": ["R5"],
+          "outgoing_reach_ids": [],
+          "local_catchment_ids": [],
+          "station_binding": {
+            "flow_station_id": "ST_FLOW_N6",
+            "stage_station_id": "ST_LEVEL_N6"
+          }
+        }
+      ],
+      "reaches": [
+        {
+          "id": "R1",
+          "upstream_node_id": "N1",
+          "downstream_node_id": "N3",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.0,
+              "x": 0.2
+            }
+          }
+        },
+        {
+          "id": "R2",
+          "upstream_node_id": "N2",
+          "downstream_node_id": "N3",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.5,
+              "x": 0.2
+            }
+          }
+        },
+        {
+          "id": "R3",
+          "upstream_node_id": "N3",
+          "downstream_node_id": "N4",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.25
+            }
+          }
+        },
+        {
+          "id": "R4",
+          "upstream_node_id": "N4",
+          "downstream_node_id": "N5",
+          "routing_model": {
+            "name": "DummyRoutingModel",
+            "params": {
+              "attenuation": 1.0
+            }
+          }
+        },
+        {
+          "id": "R5",
+          "upstream_node_id": "N4",
+          "downstream_node_id": "N6",
+          "routing_model": {
+            "name": "DummyRoutingModel",
+            "params": {
+              "attenuation": 1.0
+            }
+          }
+        }
+      ],
+      "catchments": [
+        {
+          "id": "CA",
+          "downstream_node_id": "N3",
+          "routing_model": {
+            "name": "DummyRoutingModel",
+            "params": {
+              "attenuation": 1.0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangRunoffModel",
+            "params": {
+              "wum": 20.0,
+              "wlm": 40.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.95,
+              "area": 500.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 10.0,
+              "wd": 20.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 18.0,
+              "qrg0": 20.0
+            }
+          }
+        },
+        {
+          "id": "CB",
+          "downstream_node_id": "N3",
+          "routing_model": {
+            "name": "DummyRoutingModel",
+            "params": {
+              "attenuation": 1.0
+            }
+          },
+          "runoff_model": {
+            "name": "TankRunoffModel",
+            "params": {
+              "upper_outflow_coeff": 0.3,
+              "lower_outflow_coeff": 0.12,
+              "percolation_coeff": 0.2,
+              "evap_coeff": 0.05
+            },
+            "state": {
+              "upper_storage": 15.0,
+              "lower_storage": 45.0
+            }
+          }
+        }
+      ],
+      "stations": {
+        "rain_gauges": [
+          {
+            "id": "STA_A",
+            "name": "A流域雨量站",
+            "unit": "mm",
+            "typical_forcing_kind": "precipitation",
+            "notes": "用于子流域 CA 的 catchment_forcing_bindings 面雨量加权"
+          },
+          {
+            "id": "STA_B",
+            "name": "B流域雨量站",
+            "unit": "mm",
+            "typical_forcing_kind": "precipitation",
+            "notes": "用于子流域 CB"
+          }
+        ],
+        "evapotranspiration_stations": [
+          {
+            "id": "PET_STA_A",
+            "name": "A流域蒸发站（PET）",
+            "unit": "mm",
+            "typical_forcing_kind": "potential_evapotranspiration",
+            "notes": "可与 variables[].monthly_values 回退配合；无站点序列时用月值"
+          }
+        ],
+        "air_temperature_stations": [],
+        "flow_stations": [
+          { "id": "ST_FLOW_N1", "name": "N1断面流量实测站", "unit": "m3/s", "notes": "普通断面：节点输出实测/演进用 flow_station_id" },
+          { "id": "ST_FLOW_N2", "name": "N2断面流量实测站", "unit": "m3/s" },
+          { "id": "ST_FLOW_N4", "name": "N4断面流量实测站", "unit": "m3/s" },
+          { "id": "ST_FLOW_N5", "name": "N5断面流量实测站", "unit": "m3/s" },
+          { "id": "ST_FLOW_N6", "name": "N6断面流量实测站", "unit": "m3/s" }
+        ],
+        "stage_stations": [
+          { "id": "ST_LEVEL_N1", "name": "N1断面水位实测站", "unit": "m" },
+          { "id": "ST_LEVEL_N2", "name": "N2断面水位实测站", "unit": "m" },
+          { "id": "ST_LEVEL_N4", "name": "N4断面水位实测站", "unit": "m" },
+          { "id": "ST_LEVEL_N5", "name": "N5断面水位实测站", "unit": "m" },
+          { "id": "ST_LEVEL_N6", "name": "N6断面水位实测站", "unit": "m" }
+        ],
+        "reservoir": [
+          {
+            "node_id": "N3",
+            "name": "水库节点3",
+            "stations": [
+              {
+                "id": "ST_IN_N3",
+                "name": "N3水库入库流量实测站",
+                "unit": "m3/s",
+                "notes": "预报入库注入、observed_inflow 等绑定 reservoir 的 inflow_station_id"
+              },
+              {
+                "id": "ST_OUT_N3",
+                "name": "N3水库出库流量实测站",
+                "unit": "m3/s",
+                "notes": "实测出库演进：use_observed_for_routing 时节点输出缝合 outflow_station_id"
+              },
+              {
+                "id": "ST_LEVEL_N3",
+                "name": "N3水库水位实测站",
+                "unit": "m"
+              }
+            ]
+          }
+        ]
+      },
+      "catchment_forcing_bindings": [
+        {
+          "catchment_id": "CA",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [{"id": "STA_A", "weight": 1.0}]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [{"id": "PET_STA_A", "weight": 1.0}],
+              "use_station_pet": true,
+              "monthly_values": [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
+            }
+          ]
+        },
+        {
+          "catchment_id": "CB",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [{"id": "STA_B", "weight": 1.0}]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

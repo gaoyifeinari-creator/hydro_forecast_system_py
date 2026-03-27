@@ -1,0 +1,522 @@
+[
+    {
+        "SecId": 1041,
+        "secType": "reservoir",
+        "HFDispatchModelAlgType": "InOutflowBalance",
+        "bHisCalcToPar": null,
+        "bAllowRC": true,
+        "downSecId": null,
+        "secCModel": null,
+        "HFDataSource": {
+            "name": "佛子岭",
+            "dataSourceType": "sensor",
+            "extractType": "discharge",
+            "flowid": "3110104104",
+            "curveid": "0",
+            "zqDirection": "stage_discharge",
+            "isSelected": "true",
+            "outflowID": "3110104110",
+            "staqeID": "3110104183",
+            "wasteFlowID": "-99",
+            "powerFolwID": "-99",
+            "outputID": "-99",
+            "planloadID": "-99",
+            "powerID": "-99",
+            "powerUnit": "1000000",
+            "flowRateID": "-99",
+            "flowRateUnit": "1.0",
+            "waterRateID": "-99",
+            "waterRateUnit": "1.0"
+        },
+        "units": [
+            {
+                "unitId": 4101,
+                "unitName": "单元4101",
+                "preStations": [
+                    {
+                        "preStaId": "3110104484",
+                        "preStaName": "磨子潭",
+                        "preStaSenid": "3110104484",
+                        "preStaWeight": 0.06
+                    },
+                    {
+                        "preStaId": "3110103984",
+                        "preStaName": "白莲崖",
+                        "preStaSenid": "3110103984",
+                        "preStaWeight": 0.143
+                    },
+                    {
+                        "preStaId": "3110104084",
+                        "preStaName": "佛子岭",
+                        "preStaSenid": "3110104084",
+                        "preStaWeight": 0.066
+                    },
+                    {
+                        "preStaId": "3110105084",
+                        "preStaName": "单龙寺",
+                        "preStaSenid": "3110105084",
+                        "preStaWeight": 0.344
+                    },
+                    {
+                        "preStaId": "3110111084",
+                        "preStaName": "汪家冲",
+                        "preStaSenid": "3110111084",
+                        "preStaWeight": 0.152
+                    },
+                    {
+                        "preStaId": "3110120484",
+                        "preStaName": "爬爬岩",
+                        "preStaSenid": "3110120484",
+                        "preStaWeight": 0.152
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发站",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.56,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 35.0,
+                    "ex": 1.5,
+                    "kss": 0.4,
+                    "kg": 0.3,
+                    "kkss": 0.95,
+                    "kkg": 0.95,
+                    "cs": 0.76,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 1.9,
+                    "qrss0": 2.0,
+                    "qrg0": 2.0,
+                    "qrs0": 1.0,
+                    "area": 525.0,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 0.7,
+                    "xe": 0.01
+                }
+            }
+        ]
+    },
+    {
+        "SecId": 1043,
+        "secType": "reservoir",
+        "HFDispatchModelAlgType": "InOutflowBalance",
+        "bHisCalcToPar": true,
+        "bAllowRC": true,
+        "downSecId": 1041,
+        "secCModel": {
+            "cmodelType": "MSKModel",
+            "n": 0,
+            "ke": 0.0,
+            "xe": 0.1
+        },
+        "HFDataSource": {
+            "name": "磨子潭",
+            "dataSourceType": "sensor",
+            "extractType": "discharge",
+            "flowid": "3110104304",
+            "curveid": "0",
+            "zqDirection": "stage_discharge",
+            "isSelected": "true",
+            "outflowID": "3110104310",
+            "staqeID": "3110104383",
+            "wasteFlowID": "-99",
+            "powerFolwID": "-99",
+            "outputID": "-99",
+            "planloadID": "-99",
+            "powerID": "-99",
+            "powerUnit": "1000000",
+            "flowRateID": "-99",
+            "flowRateUnit": "1.0",
+            "waterRateID": "-99",
+            "waterRateUnit": "1.0"
+        },
+        "units": [
+            {
+                "unitId": 4301,
+                "unitName": "单元4301",
+                "preStations": [
+                    {
+                        "preStaId": "3110104584",
+                        "preStaName": "头陀",
+                        "preStaSenid": "3110104584",
+                        "preStaWeight": 0.713
+                    },
+                    {
+                        "preStaId": "3110104484",
+                        "preStaName": "磨子潭",
+                        "preStaSenid": "3110104484",
+                        "preStaWeight": 0.287
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.65,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 25.0,
+                    "ex": 1.5,
+                    "kss": 0.2,
+                    "kg": 0.1,
+                    "kkss": 0.7,
+                    "kkg": 0.9,
+                    "cs": 0.7,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 1.9,
+                    "qrss0": 2.0,
+                    "qrg0": 2.0,
+                    "qrs0": 1.0,
+                    "area": 165.2,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 1.0,
+                    "xe": 0.1
+                }
+            },
+            {
+                "unitId": 4302,
+                "unitName": "单元4302",
+                "preStations": [
+                    {
+                        "preStaId": "3110102884",
+                        "preStaName": "黄尾河",
+                        "preStaSenid": "3110102884",
+                        "preStaWeight": 0.268
+                    },
+                    {
+                        "preStaId": "3110102700",
+                        "preStaName": "河口寺",
+                        "preStaSenid": "3110102700",
+                        "preStaWeight": 0.377
+                    },
+                    {
+                        "preStaId": "3110102600",
+                        "preStaName": "阔滩",
+                        "preStaSenid": "3110102600",
+                        "preStaWeight": 0.355
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.75,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 40.0,
+                    "ex": 1.5,
+                    "kss": 0.3,
+                    "kg": 0.3,
+                    "kkss": 0.5,
+                    "kkg": 0.9,
+                    "cs": 0.75,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 1.9,
+                    "qrss0": 2.0,
+                    "qrg0": 2.0,
+                    "qrs0": 1.0,
+                    "area": 404.8,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 1.0,
+                    "xe": 0.1
+                }
+            }
+        ]
+    },
+    {
+        "SecId": 1039,
+        "secType": "reservoir",
+        "HFDispatchModelAlgType": "InOutflowBalance",
+        "bHisCalcToPar": true,
+        "bAllowRC": true,
+        "downSecId": 1041,
+        "secCModel": {
+            "cmodelType": "MSKModel",
+            "n": 0,
+            "ke": 0.0,
+            "xe": 0.1
+        },
+        "HFDataSource": {
+            "name": "白莲崖",
+            "dataSourceType": "sensor",
+            "extractType": "discharge",
+            "flowid": "3110103904",
+            "curveid": "0",
+            "zqDirection": "stage_discharge",
+            "isSelected": "true",
+            "outflowID": "3110103910",
+            "staqeID": "3110103983",
+            "wasteFlowID": "-99",
+            "powerFolwID": "-99",
+            "outputID": "-99",
+            "planloadID": "-99",
+            "powerID": "-99",
+            "powerUnit": "1000000",
+            "flowRateID": "-99",
+            "flowRateUnit": "1.0",
+            "waterRateID": "-99",
+            "waterRateUnit": "1.0"
+        },
+        "units": [
+            {
+                "unitId": 3901,
+                "unitName": "单元3901",
+                "preStations": [
+                    {
+                        "preStaId": "3110103984",
+                        "preStaName": "白莲崖",
+                        "preStaSenid": "3110103984",
+                        "preStaWeight": 0.441
+                    },
+                    {
+                        "preStaId": "3110103484",
+                        "preStaName": "漫水河",
+                        "preStaSenid": "3110103484",
+                        "preStaWeight": 0.559
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.6,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 50.0,
+                    "ex": 1.5,
+                    "kss": 0.3,
+                    "kg": 0.1,
+                    "kkss": 0.9,
+                    "kkg": 0.97,
+                    "cs": 0.9,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 6.0,
+                    "qrss0": 0.0,
+                    "qrg0": 3.0,
+                    "qrs0": 0.0,
+                    "area": 105.0,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 1.0,
+                    "xe": 0.1
+                }
+            },
+            {
+                "unitId": 3902,
+                "unitName": "单元3902",
+                "preStations": [
+                    {
+                        "preStaId": "3110103284",
+                        "preStaName": "长山冲",
+                        "preStaSenid": "3110103284",
+                        "preStaWeight": 0.28
+                    },
+                    {
+                        "preStaId": "3110103084",
+                        "preStaName": "上土寺",
+                        "preStaSenid": "3110103084",
+                        "preStaWeight": 0.354
+                    },
+                    {
+                        "preStaId": "3110103384",
+                        "preStaName": "太平畈",
+                        "preStaSenid": "3110103384",
+                        "preStaWeight": 0.254
+                    },
+                    {
+                        "preStaId": "3110106884",
+                        "preStaName": "千工堰",
+                        "preStaSenid": "3110106884",
+                        "preStaWeight": 0.111
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.75,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 36.0,
+                    "ex": 1.5,
+                    "kss": 0.3,
+                    "kg": 0.1,
+                    "kkss": 0.7,
+                    "kkg": 0.97,
+                    "cs": 0.9,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 6.0,
+                    "qrss0": 0.0,
+                    "qrg0": 3.0,
+                    "qrs0": 0.0,
+                    "area": 296.24,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 0.7,
+                    "xe": 0.1
+                }
+            },
+            {
+                "unitId": 3903,
+                "unitName": "单元3903",
+                "preStations": [
+                    {
+                        "preStaId": "3110106984",
+                        "preStaName": "郑家湾",
+                        "preStaSenid": "3110106984",
+                        "preStaWeight": 0.121
+                    },
+                    {
+                        "preStaId": "3110103484",
+                        "preStaName": "漫水河",
+                        "preStaSenid": "3110103484",
+                        "preStaWeight": 0.134
+                    },
+                    {
+                        "preStaId": "3110102984",
+                        "preStaName": "太阳",
+                        "preStaSenid": "3110102984",
+                        "preStaWeight": 0.239
+                    },
+                    {
+                        "preStaId": "3110103184",
+                        "preStaName": "千笠寺",
+                        "preStaSenid": "3110103184",
+                        "preStaWeight": 0.506
+                    }
+                ],
+                "evapStation": {
+                    "evapStaId": "0",
+                    "evapStaName": "蒸发",
+                    "evapExtractType": "local",
+                    "evapStaSenid": "-99",
+                    "evapArr": "1.06,1.48,2.54,3.9,4.66,3.36,4.74,4.1,2.82,2.3,1.66,1.28",
+                    "evapStaWeight": 1.0
+                },
+                "unitGModel": {
+                    "gmodelType": "XAJCSModel",
+                    "lag": 1,
+                    "wum": 20.0,
+                    "wlm": 70.0,
+                    "wdm": 60.0,
+                    "k": 0.75,
+                    "c": 0.15,
+                    "b": 0.3,
+                    "imp": 0.02,
+                    "sm": 36.0,
+                    "ex": 1.5,
+                    "kss": 0.3,
+                    "kg": 0.1,
+                    "kkss": 0.7,
+                    "kkg": 0.97,
+                    "cs": 0.7,
+                    "wu0": 5.3,
+                    "wl0": 70.0,
+                    "wd0": 60.0,
+                    "fr0": 0.01,
+                    "s0": 6.0,
+                    "qrss0": 0.0,
+                    "qrg0": 3.0,
+                    "qrs0": 0.0,
+                    "area": 343.76,
+                    "uh": null
+                },
+                "unitCModel": {
+                    "cmodelType": "MSKModel",
+                    "n": 1,
+                    "ke": 0.7,
+                    "xe": 0.1
+                }
+            }
+        ]
+    }
+]
