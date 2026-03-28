@@ -1,0 +1,805 @@
+{
+  "metadata": {
+    "name": "converted_legacy_project_calibrated",
+    "description": "SCE-UA calibration NSE=-0.4282 | Calibrated 2026-03-28 | NSE=-0.4282 | params=3901.k=0.7153,3901.k_hours=10.4787,3901.kg=0.2810,3901.kkg=0.9257,3901.kkss=0.8786,3901.kss=0.4444,3901.sm=39.2238,3902.k=0.5059,3902.k_hours=8.7774,3902.kg=0.0692,3902.kkg=0.8234,3902.kkss=0.8607,3902.kss=0.1847,3902.sm=55.7086,3903.k=0.3007,3903.k_hours=8.7179,3903.kg=0.3387,3903.kkg=0.6969,3903.kkss=0.9360,3903.kss=0.6957,3903.sm=99.5310,4101.k=1.0675,4101.k_hours=0.4640,4101.kg=0.6678,4101.kkg=0.9906,4101.kkss=0.9891,4101.kss=0.1696,4101.sm=11.6950,4301.k=0.8083,4301.k_hours=5.8837,4301.kg=0.0936,4301.kkg=0.6604,4301.kkss=0.8120,4301.kss=0.5296,4301.sm=77.6139,4302.k=0.4973,4302.k_hours=5.7473,4302.kg=0.6487,4302.kkg=0.9551,4302.kkss=0.8783,4302.kss=0.1102,4302.sm=12.2968"
+  },
+  "schemes": [
+    {
+      "time_type": "Hour",
+      "step_size": 1,
+      "time_axis": {
+        "warmup_period_steps": 720,
+        "correction_period_steps": 48,
+        "historical_display_period_steps": 72,
+        "forecast_period_steps": 48
+      },
+      "nodes": [
+        {
+          "id": "1041",
+          "name": "佛子岭",
+          "type": "reservoir",
+          "incoming_reach_ids": [
+            "R_1043_TO_1041",
+            "R_1039_TO_1041"
+          ],
+          "outgoing_reach_ids": [],
+          "local_catchment_ids": [
+            "4101"
+          ],
+          "station_binding": {
+            "inflow_station_id": "3110104104",
+            "outflow_station_id": "3110104110",
+            "stage_station_id": "3110104183"
+          },
+          "use_observed_for_routing": false,
+          "params": {
+            "dispatch_model_alg_type": "InOutflowBalance",
+            "inflow_attenuation": 1.0
+          }
+        },
+        {
+          "id": "1043",
+          "name": "磨子潭",
+          "type": "reservoir",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": [
+            "R_1043_TO_1041"
+          ],
+          "local_catchment_ids": [
+            "4301",
+            "4302"
+          ],
+          "station_binding": {
+            "inflow_station_id": "3110104304",
+            "outflow_station_id": "3110104310",
+            "stage_station_id": "3110104383"
+          },
+          "use_observed_for_routing": true,
+          "params": {
+            "dispatch_model_alg_type": "InOutflowBalance",
+            "inflow_attenuation": 1.0
+          }
+        },
+        {
+          "id": "1039",
+          "name": "白莲崖",
+          "type": "reservoir",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": [
+            "R_1039_TO_1041"
+          ],
+          "local_catchment_ids": [
+            "3901",
+            "3902",
+            "3903"
+          ],
+          "station_binding": {
+            "inflow_station_id": "3110103904",
+            "outflow_station_id": "3110103910",
+            "stage_station_id": "3110103983"
+          },
+          "use_observed_for_routing": true,
+          "params": {
+            "dispatch_model_alg_type": "InOutflowBalance",
+            "inflow_attenuation": 1.0
+          }
+        }
+      ],
+      "reaches": [
+        {
+          "id": "R_1043_TO_1041",
+          "upstream_node_id": "1043",
+          "downstream_node_id": "1041",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.0,
+              "x": 0.1,
+              "n_segments": 0
+            }
+          }
+        },
+        {
+          "id": "R_1039_TO_1041",
+          "upstream_node_id": "1039",
+          "downstream_node_id": "1041",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.0,
+              "x": 0.1,
+              "n_segments": 0
+            }
+          }
+        }
+      ],
+      "catchments": [
+        {
+          "id": "4101",
+          "downstream_node_id": "1041",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.46401174807873086,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 1.0675369794586742,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 11.695047856750946,
+              "ex": 1.5,
+              "kss": 0.16956466400083453,
+              "kg": 0.6677726717552834,
+              "kkss": 0.9891025989632838,
+              "kkg": 0.9906097559064315,
+              "cs": 0.76,
+              "area": 525.0
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 1.9,
+              "qrss0": 2.0,
+              "qrg0": 2.0,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "4301",
+          "downstream_node_id": "1043",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 5.883691350479219,
+              "x": 0.1,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 0.8083338105220831,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 77.61385676722367,
+              "ex": 1.5,
+              "kss": 0.5295726662873519,
+              "kg": 0.09358309581720181,
+              "kkss": 0.8119540342296868,
+              "kkg": 0.6604492115491182,
+              "cs": 0.7,
+              "area": 165.2
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 1.9,
+              "qrss0": 2.0,
+              "qrg0": 2.0,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "4302",
+          "downstream_node_id": "1043",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 5.747316719864806,
+              "x": 0.1,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 0.4972989680760609,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 12.296794501938054,
+              "ex": 1.5,
+              "kss": 0.11015834911712147,
+              "kg": 0.64874850212445,
+              "kkss": 0.8783242722512347,
+              "kkg": 0.9550730230979733,
+              "cs": 0.75,
+              "area": 404.8,
+              "debug_trace": true
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 1.9,
+              "qrss0": 2.0,
+              "qrg0": 2.0,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "3901",
+          "downstream_node_id": "1039",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 10.478746828091312,
+              "x": 0.1,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 0.7152765335506902,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 39.223830918650485,
+              "ex": 1.5,
+              "kss": 0.44442894871991534,
+              "kg": 0.2809710297679433,
+              "kkss": 0.8785701993420134,
+              "kkg": 0.9257417793663469,
+              "cs": 0.9,
+              "area": 105.0
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.0,
+              "qrg0": 3.0,
+              "qs0": 0.0
+            }
+          }
+        },
+        {
+          "id": "3902",
+          "downstream_node_id": "1039",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 8.777371832270722,
+              "x": 0.1,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 0.5059380921341027,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 55.70857547646082,
+              "ex": 1.5,
+              "kss": 0.1846710774438186,
+              "kg": 0.0692273974320827,
+              "kkss": 0.8606723511222653,
+              "kkg": 0.8234409254322825,
+              "cs": 0.9,
+              "area": 296.24
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.0,
+              "qrg0": 3.0,
+              "qs0": 0.0
+            }
+          }
+        },
+        {
+          "id": "3903",
+          "downstream_node_id": "1039",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 8.717936549057583,
+              "x": 0.1,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 60.0,
+              "k": 0.30073736519299205,
+              "c": 0.15,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 99.53098566247631,
+              "ex": 1.5,
+              "kss": 0.6957397788676208,
+              "kg": 0.3386765576608874,
+              "kkss": 0.9359593693278918,
+              "kkg": 0.6968586528419626,
+              "cs": 0.7,
+              "area": 343.76
+            },
+            "state": {
+              "wu": 5.3,
+              "wl": 70.0,
+              "wd": 60.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.0,
+              "qrg0": 3.0,
+              "qs0": 0.0
+            }
+          }
+        }
+      ],
+      "stations": {
+        "rain_gauges": [
+          {
+            "id": "3110104484",
+            "name": "3110104484",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103984",
+            "name": "3110103984",
+            "unit": "mm"
+          },
+          {
+            "id": "3110104084",
+            "name": "3110104084",
+            "unit": "mm"
+          },
+          {
+            "id": "3110105084",
+            "name": "3110105084",
+            "unit": "mm"
+          },
+          {
+            "id": "3110111084",
+            "name": "3110111084",
+            "unit": "mm"
+          },
+          {
+            "id": "3110120484",
+            "name": "3110120484",
+            "unit": "mm"
+          },
+          {
+            "id": "3110104584",
+            "name": "3110104584",
+            "unit": "mm"
+          },
+          {
+            "id": "3110102884",
+            "name": "3110102884",
+            "unit": "mm"
+          },
+          {
+            "id": "3110102700",
+            "name": "3110102700",
+            "unit": "mm"
+          },
+          {
+            "id": "3110102600",
+            "name": "3110102600",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103484",
+            "name": "3110103484",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103284",
+            "name": "3110103284",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103084",
+            "name": "3110103084",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103384",
+            "name": "3110103384",
+            "unit": "mm"
+          },
+          {
+            "id": "3110106884",
+            "name": "3110106884",
+            "unit": "mm"
+          },
+          {
+            "id": "3110106984",
+            "name": "3110106984",
+            "unit": "mm"
+          },
+          {
+            "id": "3110102984",
+            "name": "3110102984",
+            "unit": "mm"
+          },
+          {
+            "id": "3110103184",
+            "name": "3110103184",
+            "unit": "mm"
+          }
+        ],
+        "evapotranspiration_stations": [],
+        "air_temperature_stations": [],
+        "flow_stations": [],
+        "stage_stations": [],
+        "reservoir": [
+          {
+            "node_id": "1041",
+            "name": "佛子岭",
+            "stations": [
+              {
+                "id": "3110104104",
+                "name": "1041入库流量站"
+              },
+              {
+                "id": "3110104110",
+                "name": "1041出库流量站"
+              },
+              {
+                "id": "3110104183",
+                "name": "1041水位站"
+              }
+            ]
+          },
+          {
+            "node_id": "1043",
+            "name": "磨子潭",
+            "stations": [
+              {
+                "id": "3110104304",
+                "name": "1043入库流量站"
+              },
+              {
+                "id": "3110104310",
+                "name": "1043出库流量站"
+              },
+              {
+                "id": "3110104383",
+                "name": "1043水位站"
+              }
+            ]
+          },
+          {
+            "node_id": "1039",
+            "name": "白莲崖",
+            "stations": [
+              {
+                "id": "3110103904",
+                "name": "1039入库流量站"
+              },
+              {
+                "id": "3110103910",
+                "name": "1039出库流量站"
+              },
+              {
+                "id": "3110103983",
+                "name": "1039水位站"
+              }
+            ]
+          }
+        ]
+      },
+      "catchment_forcing_bindings": [
+        {
+          "catchment_id": "4101",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110104484",
+                  "weight": 0.06
+                },
+                {
+                  "id": "3110103984",
+                  "weight": 0.143
+                },
+                {
+                  "id": "3110104084",
+                  "weight": 0.066
+                },
+                {
+                  "id": "3110105084",
+                  "weight": 0.344
+                },
+                {
+                  "id": "3110111084",
+                  "weight": 0.152
+                },
+                {
+                  "id": "3110120484",
+                  "weight": 0.152
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "4301",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110104584",
+                  "weight": 0.713
+                },
+                {
+                  "id": "3110104484",
+                  "weight": 0.287
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "4302",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110102884",
+                  "weight": 0.268
+                },
+                {
+                  "id": "3110102700",
+                  "weight": 0.377
+                },
+                {
+                  "id": "3110102600",
+                  "weight": 0.355
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "3901",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110103984",
+                  "weight": 0.441
+                },
+                {
+                  "id": "3110103484",
+                  "weight": 0.559
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "3902",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110103284",
+                  "weight": 0.28
+                },
+                {
+                  "id": "3110103084",
+                  "weight": 0.354
+                },
+                {
+                  "id": "3110103384",
+                  "weight": 0.254
+                },
+                {
+                  "id": "3110106884",
+                  "weight": 0.111
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "3903",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "3110106984",
+                  "weight": 0.121
+                },
+                {
+                  "id": "3110103484",
+                  "weight": 0.134
+                },
+                {
+                  "id": "3110102984",
+                  "weight": 0.239
+                },
+                {
+                  "id": "3110103184",
+                  "weight": 0.506
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                1.06,
+                1.48,
+                2.54,
+                3.9,
+                4.66,
+                3.36,
+                4.74,
+                4.1,
+                2.82,
+                2.3,
+                1.66,
+                1.28
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
