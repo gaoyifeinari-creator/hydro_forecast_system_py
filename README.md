@@ -15,7 +15,7 @@ The project focuses on:
 ## Core Features
 
 - **DAG-based scheduling**: network built by `ForecastingScheme`, executed in topological order
-- **Model strategy abstraction**: runoff/routing models implement `IHydrologicalModel`
+- **Model strategy abstraction + registry**: runoff/routing/correction models implement `IHydrologicalModel` / `IErrorUpdater`; all models self-register via `MODEL_REGISTRY` (plugin-friendly, no hard-coded if-branches in core loader)
 - **Time-context driven simulation**: `ForecastTimeContext` controls warmup/correction/history/forecast windows
 - **Observed-data integration**:
   - node observed routing relay
@@ -27,6 +27,30 @@ The project focuses on:
 - **Catchment runoff parallelization**:
   - `catchment_workers=1` for single-thread
   - `None`/`<=0` for auto worker estimation
+
+---
+
+### Model Registry (Plugin System)
+
+Models are registered via `hydro_engine.models.register_model(name, factory)`.  
+All runoff, routing, and correction models self-register on import — no central if-branches needed.
+
+**How to add a new model** (e.g. `SARunoffModel`):
+
+```python
+# In hydro_engine/models/runoff/sarunnof.py
+class SARunoffModel(IHydrologicalModel):
+    ...
+
+# In hydro_engine/models/runoff/__init__.py (bottom of file):
+def _make_sarunoff(model_data) -> SARunoffModel:
+    params = model_data.get("params", {})
+    return SARunoffModel(k=float(params.get("k", 0.5)), ...)
+
+register_model("SARunoffModel", _make_sarunoff)
+```
+
+The JSON config loader (`json_config._build_model`) will now automatically find it — no changes to core loading code required.
 
 ---
 

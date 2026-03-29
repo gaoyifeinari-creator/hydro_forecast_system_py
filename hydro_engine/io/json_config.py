@@ -33,21 +33,7 @@ from hydro_engine.domain.nodes.reservoir import (
 from hydro_engine.domain.reach import RiverReach
 from hydro_engine.engine.calculator import CalculationEngine, CalculationResult
 from hydro_engine.engine.scheme import ForecastingScheme
-from hydro_engine.models.correction import AR1ErrorUpdater
-from hydro_engine.models.routing import DummyRoutingModel, MuskingumRoutingModel
-from hydro_engine.models.runoff import (
-    DummyRunoffModel,
-    SnowmeltRunoffModel,
-    TankParams,
-    TankRunoffModel,
-    TankState,
-    XinanjiangCSParams,
-    XinanjiangCSRunoffModel,
-    XinanjiangCSState,
-    XinanjiangParams,
-    XinanjiangRunoffModel,
-    XinanjiangState,
-)
+from hydro_engine.models import MODEL_REGISTRY, _make_model_from_registry
 from hydro_engine.processing.pipeline import CatchmentDataSynthesizer
 
 
@@ -600,11 +586,11 @@ def _parse_node_correction(raw: Optional[Dict[str, Any]]) -> Optional[NodeCorrec
 
 
 def _build_updater(data: Dict[str, Any]) -> IErrorUpdater:
-    name = data["name"]
-    params = data.get("params", {})
-    if name == "AR1ErrorUpdater":
-        return AR1ErrorUpdater(decay_factor=float(params.get("decay_factor", 0.8)))
-    raise ValueError(f"Unsupported updater name: {name}")
+    """通过模型注册表实例化误差校正器。"""
+    name = str(data["name"])
+    # 误差校正器通过 register_model("AR1ErrorUpdater", ...) 已注册到 MODEL_REGISTRY
+    # 其工厂函数接收完整 data（含 params），此处透传
+    return _make_model_from_registry(name, data)
 
 
 def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
@@ -733,119 +719,19 @@ def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
 
 
 def _build_model(model_data: Dict[str, Any]) -> IHydrologicalModel:
-    name = model_data["name"]
-    params = model_data.get("params", {})
-    state = model_data.get("state", {})
+    """通过模型注册表实例化水文模型。
 
-    model_map = {
-        "DummyRunoffModel": DummyRunoffModel,
-        "DummyRoutingModel": DummyRoutingModel,
-        "SnowmeltRunoffModel": SnowmeltRunoffModel,
-        "XinanjiangRunoffModel": XinanjiangRunoffModel,
-        "XinanjiangCSRunoffModel": XinanjiangCSRunoffModel,
-        "TankRunoffModel": TankRunoffModel,
-        "MuskingumRoutingModel": MuskingumRoutingModel,
-    }
-    if name not in model_map:
-        raise ValueError(f"Unsupported model name: {name}")
+    所有产流模型、河道演进模型均通过 ``register_model`` 自注册到 ``MODEL_REGISTRY``。
+    新增模型只需在对应 ``__init__.py`` 末尾调用 ``register_model``，无需修改本函数。
 
-    if name == "XinanjiangRunoffModel":
-        ug = params.get("unit_graph")
-        unit_graph = (
-            (float(ug[0]), float(ug[1]), float(ug[2]))
-            if isinstance(ug, (list, tuple)) and len(ug) == 3
-            else (0.2, 0.7, 0.1)
-        )
-        return XinanjiangRunoffModel(
-            params=XinanjiangParams(
-                wum=float(params.get("wum", 20.0)),
-                wlm=float(params.get("wlm", 40.0)),
-                wdm=float(params.get("wdm", 40.0)),
-                k=float(params.get("k", 0.8)),
-                c=float(params.get("c", 0.1)),
-                b=float(params.get("b", 0.3)),
-                imp=float(params.get("imp", 0.02)),
-                sm=float(params.get("sm", 30.0)),
-                ex=float(params.get("ex", 1.2)),
-                kss=float(params.get("kss", 0.4)),
-                kg=float(params.get("kg", 0.3)),
-                kkss=float(params.get("kkss", 0.9)),
-                kkg=float(params.get("kkg", 0.95)),
-                area=float(params.get("area", 0.0)),
-                unit_graph=unit_graph,
-            ),
-            state=XinanjiangState(
-                wu=float(state.get("wu", params.get("wu0", 5.0))),
-                wl=float(state.get("wl", params.get("wl0", 10.0))),
-                wd=float(state.get("wd", params.get("wd0", 20.0))),
-                fr=float(state.get("fr", params.get("fr0", 0.01))),
-                s=float(state.get("s", params.get("s0", 6.0))),
-                qrss0=float(state.get("qrss0", params.get("qrss0", 18.0))),
-                qrg0=float(state.get("qrg0", params.get("qrg0", 20.0))),
-            ),
-        )
-    if name == "XinanjiangCSRunoffModel":
-        return XinanjiangCSRunoffModel(
-            params=XinanjiangCSParams(
-                lag=int(params.get("lag", 1)),
-                wum=float(params.get("wum", 20.0)),
-                wlm=float(params.get("wlm", 40.0)),
-                wdm=float(params.get("wdm", 40.0)),
-                k=float(params.get("k", 0.8)),
-                c=float(params.get("c", 0.1)),
-                b=float(params.get("b", 0.3)),
-                imp=float(params.get("imp", 0.02)),
-                sm=float(params.get("sm", 30.0)),
-                ex=float(params.get("ex", 1.2)),
-                kss=float(params.get("kss", 0.4)),
-                kg=float(params.get("kg", 0.3)),
-                kkss=float(params.get("kkss", 0.9)),
-                kkg=float(params.get("kkg", 0.95)),
-                cs=float(params.get("cs", 0.8)),
-                area=float(params.get("area", 0.0)),
-            ),
-            state=XinanjiangCSState(
-                wu=float(state.get("wu", params.get("wu0", 5.0))),
-                wl=float(state.get("wl", params.get("wl0", 10.0))),
-                wd=float(state.get("wd", params.get("wd0", 20.0))),
-                fr=float(state.get("fr", params.get("fr0", 0.01))),
-                s=float(state.get("s", params.get("s0", 6.0))),
-                qrss0=float(state.get("qrss0", params.get("qrss0", 18.0))),
-                qrg0=float(state.get("qrg0", params.get("qrg0", 20.0))),
-                qs0=float(state.get("qs0", params.get("qrs0", 20.0))),
-            ),
-            debug_trace=bool(params.get("debug_trace", False)),
-        )
-    if name == "TankRunoffModel":
-        return TankRunoffModel(
-            params=TankParams(
-                upper_outflow_coeff=float(params.get("upper_outflow_coeff", 0.30)),
-                lower_outflow_coeff=float(params.get("lower_outflow_coeff", 0.10)),
-                percolation_coeff=float(params.get("percolation_coeff", 0.20)),
-                evap_coeff=float(params.get("evap_coeff", 0.05)),
-            ),
-            state=TankState(
-                upper_storage=float(
-                    state.get(
-                        "upper_storage",
-                        params.get("upper_initial_storage", 20.0),
-                    )
-                ),
-                lower_storage=float(
-                    state.get(
-                        "lower_storage",
-                        params.get("lower_initial_storage", 60.0),
-                    )
-                ),
-            ),
-        )
-    if name == "SnowmeltRunoffModel":
-        return SnowmeltRunoffModel(
-            temperature_melt_threshold=float(params.get("temperature_melt_threshold", 0.0)),
-            melt_degree_factor=float(params.get("melt_degree_factor", 0.02)),
-            rain_runoff_factor=float(params.get("rain_runoff_factor", 0.4)),
-        )
-    return model_map[name](**params)
+    Args:
+        model_data: JSON 中 ``model`` 节点的完整 dict，含 ``name`` / ``params`` / ``state`` 等。
+
+    Raises:
+        ValueError: 模型名称未在注册表中注册。
+    """
+    name = str(model_data["name"])
+    return _make_model_from_registry(name, model_data)
 
 
 def _parse_datetime(dt_text: str) -> datetime:
