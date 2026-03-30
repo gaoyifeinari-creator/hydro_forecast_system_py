@@ -65,6 +65,8 @@ hydro_project/
 │   │       └── muskingum.py          # 对齐 Java HFMSKAlg（NE=2）；Dt/x1/x2约束仅 warning 后继续
 │   └── io/
 │       ├── __init__.py
+│       ├── calculation_app_data_loader.py  # 读取数据库/文件/连库：支持 SENID IN + 分块
+│       ├── calculation_app_data_builder.py # df/series -> ForcingData/TimeSeries 拼装
 │       └── json_config.py             # 从 JSON 加载方案、映射测站降雨、一键计算
 ├── tests/
 │   ├── __init__.py
@@ -151,6 +153,10 @@ hydro_project/
 - SQL 配置：`hydro_engine/read_data/sql/<dialect>.yaml`
   - 具体到 schema/表名/字段选择都写在这里（例如 `dameng.yaml` 的 `hourdb_hourly_range` / `hourdb_hourly_station`）；
   - `sql_key` 选择 YAML 里的哪个查询逻辑片段。
+- 性能优化（多测站）：为避免全量扫描，新增 `*_range_in` 查询键
+  - YAML 里形如：`... AND SENID IN :senids`
+  - 入口层会在内存中统计本次真正需要的测站集合（SENID 列表），并把 `params["senids"]` 传给数据库读取。
+- 大列表自动分块：当 `senids` 数量很大时，`database_reader.py` 会按 `senid_chunk_size` 分批执行 IN 查询并合并结果。
 - 运行时参数绑定：通过 SQLAlchemy `:t_start/:t_end` 等占位符参数传入（代码内使用 `conn.execute(stmt, params)` 执行）。
 
 如果后续更换表名或 schema，只需要更新 `sql/<dialect>.yaml`，不必改动数据库连接文件。
@@ -220,8 +226,8 @@ hydro_project/
 ### `scripts/`（应用层）
 
 - `scripts/calculation_app_common.py`
-  - 主要内容：桌面端与网页端共用辅助函数（配置读写、CSV 到 `ForcingData` 转换、图表辅助数据）。
-  - 关键点：读取入口已接入 `hydro_engine.read_data.read_station_data(...)`。
+  - 主要内容：历史薄封装/兼容层（重导出 `hydro_engine/io/calculation_app_data_loader.py` 与 `hydro_engine/io/calculation_app_data_builder.py`，并保留 `write_temp_config_with_periods(...)`）。
+  - 关键点：**不再包含读数/拼装的重复实现**，核心逻辑应改为直接依赖 `hydro_engine/io/*`。
 - `scripts/desktop_calculation_app.py`
   - 主要内容：Tkinter 桌面客户端，包含参数面板、多标签图表、debug 表格、异步计算线程。
   - 关键点：
