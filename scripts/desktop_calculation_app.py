@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from calculation_app_common import (
+    DEFAULT_FLOOD_JDBC_CONFIG,
     build_catchment_observed_flow_series,
     build_catchment_precip_series,
     build_node_observed_flow_series,
@@ -27,12 +28,30 @@ from calculation_app_common import (
     build_observed_flows,
     build_station_packages,
     build_times,
-    load_csv,
+    load_rain_flow_for_calculation,
     read_config,
 )
 from hydro_engine.core.forcing import ForcingKind
 from hydro_engine.core.timeseries import TimeSeries
 from hydro_engine.io.json_config import load_scheme_from_json, run_calculation_from_json
+
+
+def _infer_debug_table_columns(rows: List[Dict[str, Any]]) -> List[str]:
+    """
+    由模型输出的 debug 行推断表格列名与顺序，界面不硬编码字段名。
+
+    顺序规则：按首行字典的键插入顺序；若某行出现新键，按出现先后接在末尾。
+    """
+    if not rows:
+        return []
+    ordered: List[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        for k in r.keys():
+            if k not in seen:
+                seen.add(k)
+                ordered.append(k)
+    return ordered
 
 
 def _write_temp_config_with_forecast_anchor(
@@ -116,8 +135,9 @@ def _configure_matplotlib_fonts() -> None:
 def run_calculation_pipeline(
     *,
     config_path: str,
-    rain_csv: str,
-    flow_csv: str,
+    jdbc_config_path: str = "",
+    rain_csv: str = "",
+    flow_csv: str = "",
     warmup_start: str,
     forecast_mode: str,
     catchment_workers: Optional[int],
@@ -154,8 +174,15 @@ def run_calculation_pipeline(
         count=time_context.step_count,
     )
 
-    rain_df = load_csv(rain_csv)
-    flow_df = load_csv(flow_csv)
+    t0 = times[0].to_pydatetime()
+    t1 = times[-1].to_pydatetime()
+    rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
+        jdbc_config_path=jdbc_config_path,
+        rain_csv=rain_csv,
+        flow_csv=flow_csv,
+        time_start=t0,
+        time_end=t1,
+    )
 
     station_packages, warn_a = build_station_packages(
         binding_specs,
@@ -164,6 +191,7 @@ def run_calculation_pipeline(
         time_context.warmup_start_time,
         time_context.time_delta,
     )
+    warn_a = jdbc_warns + warn_a
     # 实时预报模式：起报时刻之后不使用实测气象（未来应由外部预报驱动）。
     forecast_start_idx = times.get_indexer([pd.Timestamp(time_context.forecast_start_time)])[0]
     if forecast_start_idx < 0:
@@ -268,6 +296,7 @@ class DesktopCalculationApp:
         self.root.geometry("1100x720")
 
         default_cfg = str(PROJECT_ROOT / "configs" / "forecastSchemeConf.json")
+        default_jdbc = str(DEFAULT_FLOOD_JDBC_CONFIG)
         default_rain = str(PROJECT_ROOT / "tests" / "佛子岭雨量.csv")
         default_flow = str(PROJECT_ROOT / "tests" / "佛子岭流量.csv")
 
@@ -281,6 +310,7 @@ class DesktopCalculationApp:
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self._var_cfg = tk.StringVar(value=default_cfg)
+        self._var_jdbc = tk.StringVar(value=default_jdbc)
         self._var_rain = tk.StringVar(value=default_rain)
         self._var_flow = tk.StringVar(value=default_flow)
         self._var_warmup_start = tk.StringVar(value="2024-01-01 01:00:00")
@@ -303,12 +333,18 @@ class DesktopCalculationApp:
         self._panel_hover_cids: Dict[str, int] = {}
         self._combo_id_maps: Dict[str, Dict[str, str]] = {}
         self._debug_rows_by_catchment: Dict[str, List[Dict[str, Any]]] = {}
+        self._debug_col_order: Tuple[str, ...] = ()
 
         row = 0
         for label, var, browse in [
             ("预报方案 JSON", self._var_cfg, "json"),
-            ("雨量 CSV（V）", self._var_rain, "csv"),
-            ("流量 CSV（AVGV）", self._var_flow, "csv"),
+            (
+                "JDBC floodForecastJdbc.json（优先连库 HOURDB）",
+                self._var_jdbc,
+                "json",
+            ),
+            ("雨量 CSV（备用，无 JDBC 时使用）", self._var_rain, "csv"),
+            ("流量 CSV（备用）", self._var_flow, "csv"),
         ]:
             ttk.Label(left, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
             e = ttk.Entry(left, textvariable=var, width=42)
@@ -450,17 +486,19 @@ class DesktopCalculationApp:
         self._debug_hint = tk.StringVar(value="开启某个流域 runoff_model.params.debug_trace=true 后可在此查看逐步中间量")
         ttk.Label(top_debug, textvariable=self._debug_hint).pack(side=tk.LEFT, padx=8)
 
-        cols = ("time", "step", "p", "pet", "pe", "r", "rs", "rss", "rg", "qtr", "out", "wu", "wl", "wd", "fr", "s")
-        self._debug_tree = ttk.Treeview(frame_debug, columns=cols, show="headings", height=18)
-        for c in cols:
-            self._debug_tree.heading(c, text=c)
-            self._debug_tree.column(c, width=86 if c != "time" else 150, anchor=tk.E if c != "time" else tk.CENTER)
-        d_ys = ttk.Scrollbar(frame_debug, orient=tk.VERTICAL, command=self._debug_tree.yview)
-        d_xs = ttk.Scrollbar(frame_debug, orient=tk.HORIZONTAL, command=self._debug_tree.xview)
+        # 列名与顺序在 _refresh_debug_table 中由模型 debug 行字典自动推断，不与此处耦合
+        # 使用 grid 绑定纵向/横向滚动条，避免 pack 顺序导致滚动条被挤掉或无法拖动
+        dbg_table_frm = ttk.Frame(frame_debug)
+        dbg_table_frm.pack(fill=tk.BOTH, expand=True)
+        self._debug_tree = ttk.Treeview(dbg_table_frm, columns=(), show="headings", height=18)
+        d_ys = ttk.Scrollbar(dbg_table_frm, orient=tk.VERTICAL, command=self._debug_tree.yview)
+        d_xs = ttk.Scrollbar(dbg_table_frm, orient=tk.HORIZONTAL, command=self._debug_tree.xview)
         self._debug_tree.configure(yscrollcommand=d_ys.set, xscrollcommand=d_xs.set)
-        self._debug_tree.pack(fill=tk.BOTH, expand=True)
-        d_ys.pack(side=tk.RIGHT, fill=tk.Y)
-        d_xs.pack(fill=tk.X)
+        self._debug_tree.grid(row=0, column=0, sticky="nsew")
+        d_ys.grid(row=0, column=1, sticky="ns")
+        d_xs.grid(row=1, column=0, sticky="ew")
+        dbg_table_frm.rowconfigure(0, weight=1)
+        dbg_table_frm.columnconfigure(0, weight=1)
 
         nb.add(frame_node, text="Node 流量")
         nb.add(frame_catch, text="Catchment")
@@ -635,6 +673,14 @@ class DesktopCalculationApp:
 
         self._panel_hover_cids[panel] = fig.canvas.mpl_connect("motion_notify_event", _on_move)
 
+    def _reconfigure_debug_treeview(self, cols: List[str]) -> None:
+        """根据模型输出的列名刷新 Treeview 列定义（列顺序由模型字典键顺序决定）。"""
+        self._debug_tree.configure(columns=cols)
+        for c in cols:
+            self._debug_tree.heading(c, text=c)
+            w = 150 if c == "time" else 86
+            self._debug_tree.column(c, width=w, anchor=self._tk.CENTER if c == "time" else self._tk.E)
+
     def _refresh_debug_table(self) -> None:
         cid = str(self._combo_debug_catch.get() or "")
         rows = self._debug_rows_by_catchment.get(cid, [])
@@ -642,36 +688,32 @@ class DesktopCalculationApp:
             self._debug_tree.delete(iid)
         if not rows:
             self._debug_hint.set("当前流域无 debug_trace 数据（请在该流域 runoff_model.params 里设置 debug_trace=true）")
+            if self._debug_col_order:
+                self._debug_col_order = ()
+                self._debug_tree.configure(columns=())
             return
-        self._debug_hint.set(f"{cid} 共 {len(rows)} 步")
+
+        cols = _infer_debug_table_columns(rows)
+        if tuple(cols) != self._debug_col_order:
+            self._debug_col_order = tuple(cols)
+            self._reconfigure_debug_treeview(cols)
+
+        self._debug_hint.set(f"{cid} 共 {len(rows)} 步，列由模型 debug 输出自动推断")
 
         def _g(r: Dict[str, Any], k: str) -> str:
             if k not in r:
                 return ""
             v = r.get(k)
+            if isinstance(v, bool):
+                return str(v)
+            if isinstance(v, int):
+                return str(v)
             if isinstance(v, float):
                 return f"{v:.6f}"
             return str(v)
 
         for i, r in enumerate(rows):
-            vals = (
-                _g(r, "time"),
-                _g(r, "step"),
-                _g(r, "p"),
-                _g(r, "pet"),
-                _g(r, "pe"),
-                _g(r, "r"),
-                _g(r, "rs"),
-                _g(r, "rss"),
-                _g(r, "rg"),
-                _g(r, "qtr"),
-                _g(r, "out"),
-                _g(r, "wu"),
-                _g(r, "wl"),
-                _g(r, "wd"),
-                _g(r, "fr"),
-                _g(r, "s"),
-            )
+            vals = tuple(_g(r, k) for k in cols)
             self._debug_tree.insert("", "end", iid=str(i), values=vals)
 
     def _on_run(self) -> None:
@@ -682,6 +724,7 @@ class DesktopCalculationApp:
             try:
                 out, times, warns, aux = run_calculation_pipeline(
                     config_path=self._var_cfg.get().strip(),
+                    jdbc_config_path=self._var_jdbc.get().strip(),
                     rain_csv=self._var_rain.get().strip(),
                     flow_csv=self._var_flow.get().strip(),
                     warmup_start=self._var_warmup_start.get().strip(),

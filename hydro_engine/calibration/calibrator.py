@@ -41,7 +41,7 @@ from calculation_app_common import (
     build_observed_flows,
     build_station_packages,
     build_times,
-    load_csv,
+    load_rain_flow_for_calculation,
     read_config,
 )
 
@@ -368,6 +368,9 @@ class HydroModelCalibrator:
         )
         result = calib.calibrate(progress=True)
         calib.save_calibrated_scheme(result, "configs/calibrated_scheme.json")
+
+    优先使用 ``jdbc_config_path`` 指向 ``configs/floodForecastJdbc.json`` 连库；否则使用 ``rain_csv`` / ``flow_csv``（CSV 或旧版 JSON）。
+    读取时间窗为 ``total_start``～``total_end``（内部固定）。
     """
 
     def __init__(
@@ -381,10 +384,12 @@ class HydroModelCalibrator:
         time_type: str = "Hour",
         step_size: int = 1,
         weights: Optional[Dict[str, float]] = None,
+        jdbc_config_path: Optional[str] = None,
     ) -> None:
         self.config_path   = Path(config_path)
         self.rain_csv      = Path(rain_csv)
         self.flow_csv      = Path(flow_csv)
+        self.jdbc_config_path = (jdbc_config_path or "").strip()
         self.time_type     = time_type
         self.step_size     = step_size
         self.step_delta     = timedelta(hours=step_size)
@@ -404,8 +409,13 @@ class HydroModelCalibrator:
         total_steps     = int((self.total_end - self.total_start).total_seconds() / 3600) + 1
         self.full_times = build_times(self.total_start, self.step_delta, total_steps)
 
-        self._rain_df = load_csv(str(self.rain_csv))
-        self._flow_df = load_csv(str(self.flow_csv))
+        self._rain_df, self._flow_df, self._jdbc_warns = load_rain_flow_for_calculation(
+            jdbc_config_path=self.jdbc_config_path,
+            rain_csv=str(self.rain_csv),
+            flow_csv=str(self.flow_csv),
+            time_start=self.total_start,
+            time_end=self.total_end,
+        )
 
         self.scheme, self.binding_specs, _ = load_scheme_from_json(
             str(self.config_path),
@@ -425,6 +435,9 @@ class HydroModelCalibrator:
 
         self.calib_params   = build_calib_params(scheme_cfg)
         self._included      = [p for p in self.calib_params if p.included]
+
+        for w in self._jdbc_warns:
+            logger.warning(w)
 
         logger.info(
             f"[HydroModelCalibrator] Ready: {len(self._included)} params to calibrate"

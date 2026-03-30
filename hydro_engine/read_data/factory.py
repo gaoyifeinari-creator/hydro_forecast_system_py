@@ -11,6 +11,7 @@ from .types import DataReadSpec, IDataReader
 
 
 def build_data_reader(source_type: str) -> IDataReader:
+    """构建读取器。``database`` 时使用 :class:`DatabaseDataReader`（见该类的 ``options`` 契约）。"""
     st = str(source_type or "").strip().lower()
     if st == "file":
         return FileDataReader()

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote_plus
 
 import pandas as pd
 
@@ -19,13 +22,285 @@ if str(PROJECT_ROOT) not in sys.path:
 from hydro_engine.read_data import read_station_data
 from hydro_engine.core.forcing import ForcingData, ForcingKind, parse_forcing_kind
 from hydro_engine.core.timeseries import TimeSeries
+
+
 def read_config(path: str) -> Dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _sqlalchemy_dm_url_from_jdbc(jdbc_url: str, user: str, password: str) -> str:
+    """将 ``jdbc:dm://host:port/dbname`` 转为 ``dm+dmPython://user:pass@host:port/dbname``。"""
+    m = re.match(r"jdbc:dm://([^:/]+):(\d+)/(.+)$", jdbc_url.strip())
+    if not m:
+        raise ValueError(
+            f"达梦 JDBC URL 格式应为 jdbc:dm://host:port/schema，当前: {jdbc_url!r}"
+        )
+    host, port, db = m.group(1), m.group(2), m.group(3)
+    return (
+        f"dm+dmPython://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{db}"
+    )
+
+
+DEFAULT_FLOOD_JDBC_CONFIG = PROJECT_ROOT / "configs" / "floodForecastJdbc.json"
+
+
+def _service_entry_to_url(
+    found: Dict[str, Any],
+    blob: Dict[str, Any],
+    spec: Dict[str, Any],
+) -> Tuple[str, int, Optional[str], int, int]:
+    raw_url = str(found.get("url") or "").strip()
+    if not raw_url:
+        raise ValueError(f'服务 "{found.get("service")}" 缺少 url')
+
+    # Java 习惯里的 minCon/maxCon -> SQLAlchemy 的 pool_min/max_overflow
+    pool_min = int(found.get("minCon", spec.get("pool_min", spec.get("pool_max", 1))))
+    pool_max = int(found.get("maxCon", spec.get("pool_max", pool_min)))
+    if pool_max < pool_min:
+        pool_max = pool_min
+    max_overflow = max(0, pool_max - pool_min)
+
+    dialect = found.get("dialect") or blob.get("dialect") or spec.get("dialect")
+    if dialect is not None:
+        dialect = str(dialect)
+
+    # 兼容：仍支持 jdbc:dm://...，也允许直接使用 dm+dmPython://...（SQLAlchemy 标准）
+    if raw_url.startswith("jdbc:dm://"):
+        user = str(found.get("user") or "").strip()
+        if not user:
+            raise ValueError(f'服务 "{found.get("service")}" 使用 jdbc URL 时需要配置 user')
+        pwd_env = str(found.get("password_env") or "").strip()
+        if pwd_env:
+            password = os.environ.get(pwd_env, "")
+        else:
+            password = str(
+                found.get("password") if found.get("password") is not None else ""
+            )
+        url = _sqlalchemy_dm_url_from_jdbc(raw_url, user, password)
+    else:
+        # SQLAlchemy URL 直接透传（账号密码可在 URL 内，也可不提供 user/password 字段）
+        url = raw_url
+
+    return url, pool_max, dialect, pool_min, max_overflow
+
+
+def _merge_database_service_spec(spec: Dict[str, Any], ref_path: Path) -> Dict[str, Any]:
+    """
+    支持：
+    1) 顶层 ``url`` / ``pool_max``（旧版）；
+    2) ``_embedded_services`` + ``service``（``floodForecastJdbc.json`` 内联 services）；
+    3) ``service`` + ``services_file``（默认 ``floodForecastJdbc.json``，兼容 ``dameng_services.json``）。
+    """
+    if spec.get("url"):
+        out = dict(spec)
+        out.pop("_embedded_services", None)
+        return out
+    svc_name = str(spec.get("service") or "").strip()
+    if not svc_name:
+        raise ValueError('数据库 JSON 需包含顶层 "url"，或 "service" 与 JDBC 服务列表')
+    embedded = spec.get("_embedded_services")
+    if isinstance(embedded, list):
+        blob: Dict[str, Any] = {"services": embedded, "dialect": spec.get("dialect")}
+        services = embedded
+        svc_path: Optional[Path] = None
+    else:
+        rel = str(spec.get("services_file") or "floodForecastJdbc.json").strip()
+        candidates = [
+            ref_path.parent / rel,
+            PROJECT_ROOT / "configs" / Path(rel).name,
+            PROJECT_ROOT / rel,
+        ]
+        svc_path = next((p for p in candidates if p.is_file()), None)
+        if svc_path is None:
+            raise FileNotFoundError(
+                f"未找到 JDBC 服务配置文件: {rel}（已尝试: {[str(c) for c in candidates]}）"
+            )
+        blob = json.loads(svc_path.read_text(encoding="utf-8"))
+        services = blob.get("services")
+    if not isinstance(services, list):
+        raise ValueError("JDBC 配置须包含 services 数组")
+    found = None
+    for s in services:
+        if str(s.get("service", "")).strip().upper() == svc_name.upper():
+            found = s
+            break
+    if found is None:
+        loc = str(svc_path) if svc_path else "embedded"
+        raise KeyError(f'服务 "{svc_name}" 未在 {loc} 中定义')
+    url, pool_max, dialect, pool_min, max_overflow = _service_entry_to_url(found, blob, spec)
+    out = dict(spec)
+    out.pop("_embedded_services", None)
+    out["url"] = url
+    out["pool_max"] = pool_max
+    out["pool_min"] = pool_min
+    out["max_overflow"] = max_overflow
+    if dialect:
+        out["dialect"] = dialect
+    return out
+
+
+def _coerce_hourdb_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """库表返回列名大小写不一致时，统一为 SENID / TIME / V / AVGV。"""
+    out = df.copy()
+    rename = {}
+    for c in list(out.columns):
+        u = str(c).strip().upper()
+        if u in ("SENID", "TIME", "V", "AVGV") and str(c).strip() != u:
+            rename[c] = u
+    return out.rename(columns=rename)
+
+
+# 测站小时表：表名/模式写在方言 YAML（如 ``sql/dameng.yaml``）；此处仅默认选用的查询键与日志标签。
+_DEFAULT_STATION_HOURLY_SQL_KEY = "hourdb_hourly_range"
+_DEFAULT_STATION_HOURLY_LABEL = "hourdb"
+
+
+def load_station_hourly_frame(
+    ref: str,
+    *,
+    time_start: Optional[datetime] = None,
+    time_end: Optional[datetime] = None,
+) -> pd.DataFrame:
+    """
+    读取测站小时数据：CSV 文件，或 JSON 数据库配置（见 ``configs/station_hourly_database.example.json``）。
+
+    * `HOURDB` 表字段：`SENID`, `TIME`, `V`（雨量/水位/蒸发等瞬时值或累计量）, `AVGV`（流量等时段平均）。
+    * JSON 配置时必须在一次计算的时间窗内传入 ``time_start`` / ``time_end``，绑定到 SQL 的 ``:t_start`` / ``t_end``。
+    * **floodForecastJdbc**：仅需 ``services[]``；可选 ``hourly_service`` 指定连哪个服务（多服务时），缺省为 ``services[0]``。
+    * **旧版**：仍可嵌套 ``station_hourly`` 以覆盖 ``sql_key`` / ``label`` 等。
+    """
+    ref = str(ref).strip()
+    p = Path(ref)
+    if p.suffix.lower() == ".json" and p.is_file():
+        raw = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(raw.get("services"), list):
+            services_list = raw["services"]
+            if not services_list:
+                raise ValueError(f"{ref} 中 services 须为非空数组")
+            if isinstance(raw.get("station_hourly"), dict):
+                sh = dict(raw["station_hourly"])
+                spec: Dict[str, Any] = {
+                    "type": "database",
+                    "_embedded_services": raw["services"],
+                    "service": str(sh.get("service") or "").strip(),
+                    "label": str(sh.get("label", _DEFAULT_STATION_HOURLY_LABEL)),
+                    "sql_key": str(sh.get("sql_key", _DEFAULT_STATION_HOURLY_SQL_KEY)),
+                    "params": dict(sh.get("params") or {}),
+                }
+                if not spec["service"]:
+                    raise ValueError(f"{ref} 中 station_hourly.service 不能为空")
+                if sh.get("pool_max") is not None:
+                    spec["pool_max"] = int(sh["pool_max"])
+                if sh.get("sql_yaml_path"):
+                    spec["sql_yaml_path"] = str(sh["sql_yaml_path"])
+                dialect = sh.get("dialect") or raw.get("dialect")
+                if dialect:
+                    spec["dialect"] = str(dialect)
+            else:
+                svc_name = str(raw.get("hourly_service") or "").strip()
+                if not svc_name:
+                    svc_name = str(services_list[0].get("service") or "").strip()
+                if not svc_name:
+                    raise ValueError(
+                        f"{ref} 需设置 hourly_service，或保证 services[0].service 非空"
+                    )
+                spec = {
+                    "type": "database",
+                    "_embedded_services": raw["services"],
+                    "service": svc_name,
+                    "label": _DEFAULT_STATION_HOURLY_LABEL,
+                    "sql_key": _DEFAULT_STATION_HOURLY_SQL_KEY,
+                    "params": {},
+                }
+                if raw.get("pool_max") is not None:
+                    spec["pool_max"] = int(raw["pool_max"])
+                if raw.get("sql_yaml_path"):
+                    spec["sql_yaml_path"] = str(raw["sql_yaml_path"])
+                dialect = raw.get("dialect")
+                if dialect:
+                    spec["dialect"] = str(dialect)
+        elif raw.get("type") == "database":
+            spec = raw
+        else:
+            raise ValueError(
+                f"JSON {ref} 须为 floodForecastJdbc（services[]，可选 hourly_service）或 type=database"
+            )
+        spec = _merge_database_service_spec(spec, p.resolve())
+        if time_start is None or time_end is None:
+            raise ValueError(
+                "数据库小时表读取必须在本次计算时间窗内提供 time_start 与 time_end（注入 :t_start / :t_end）"
+            )
+        params = dict(spec.get("params") or {})
+        params["t_start"] = time_start.strftime("%Y-%m-%d %H:%M:%S")
+        params["t_end"] = time_end.strftime("%Y-%m-%d %H:%M:%S")
+        opts: Dict[str, Any] = {
+            "url": spec["url"],
+            "dialect": spec["dialect"],
+            "sql_key": spec.get("sql_key", _DEFAULT_STATION_HOURLY_SQL_KEY),
+            "pool_max": int(spec.get("pool_max", 5)),
+            "pool_min": int(spec.get("pool_min", spec.get("pool_max", 5))),
+            "max_overflow": int(
+                spec.get(
+                    "max_overflow",
+                    max(0, int(spec.get("pool_max", 5)) - int(spec.get("pool_min", spec.get("pool_max", 5)))),
+                )
+            ),
+            "params": params,
+            "normalize": True,
+        }
+        if spec.get("sql_yaml_path"):
+            opts["sql_yaml_path"] = str(spec["sql_yaml_path"])
+        df = read_station_data(
+            source=str(spec.get("label", _DEFAULT_STATION_HOURLY_LABEL)),
+            source_type="database",
+            options=opts,
+        )
+        return _coerce_hourdb_column_names(df)
+    return read_station_data(ref, source_type="file")
+
+
+def load_rain_flow_for_calculation(
+    *,
+    jdbc_config_path: str = "",
+    rain_csv: str = "",
+    flow_csv: str = "",
+    time_start: datetime,
+    time_end: datetime,
+) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
+    """
+    优先使用 ``floodForecastJdbc.json`` 连库读取 HOURDB（雨量 V + 流量 AVGV 同表）；
+    若未配置或文件不存在，则回退为 CSV / 旧版 JSON 路径（与原先逻辑一致）。
+    """
+    warns: List[str] = []
+    jc = str(jdbc_config_path).strip()
+    if jc and Path(jc).is_file():
+        shared = load_station_hourly_frame(jc, time_start=time_start, time_end=time_end)
+        return shared, shared, warns
+    if jc and not Path(jc).is_file():
+        warns.append(f"JDBC 配置不存在，已回退 CSV：{jc}")
+    rp = str(rain_csv).strip()
+    fp = str(flow_csv).strip()
+    if rp and rp == fp and Path(rp).suffix.lower() == ".json":
+        shared = load_station_hourly_frame(rp, time_start=time_start, time_end=time_end)
+        return shared, shared, warns
+    if not rp or not fp:
+        raise ValueError(
+            "请配置 floodForecastJdbc.json 路径，或同时提供雨量 CSV 与流量 CSV（备用）"
+        )
+    rain_df = load_station_hourly_frame(rp, time_start=time_start, time_end=time_end)
+    flow_df = load_station_hourly_frame(fp, time_start=time_start, time_end=time_end)
+    return rain_df, flow_df, warns
+
+
 def load_csv(path: str) -> pd.DataFrame:
-    # Current default: local file backend. DB/API backends are reserved in data_reader.py.
-    return read_station_data(path, source_type="file")
+    """仅从本地 CSV 读取（兼容旧调用）。若路径为 JSON 数据库配置，请改用 ``load_station_hourly_frame``。"""
+    p = Path(str(path).strip())
+    if p.suffix.lower() == ".json":
+        raise ValueError(
+            "数据库小时表请在计算流程中使用 load_station_hourly_frame(ref, time_start=..., time_end=...)，"
+            "主配置见 configs/floodForecastJdbc.example.json"
+        )
+    return read_station_data(str(path), source_type="file")
 
 
 def build_times(context_start: datetime, step, count: int) -> pd.DatetimeIndex:

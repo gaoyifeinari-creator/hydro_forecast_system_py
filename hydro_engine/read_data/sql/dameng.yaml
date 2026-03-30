@@ -1,0 +1,14 @@
+# 达梦 DM：测站小时表查询。模式、表名、列名均在此维护（例如 ``FROM 模式名.表名``）；JDBC 配置只提供连接。
+# 默认键 hourdb_hourly_range 由 load_station_hourly_frame 使用；若需改名请在代码常量或旧版 station_hourly 中覆盖 sql_key。
+
+hourdb_hourly_range: |
+  SELECT SENID, TIME, V, AVGV
+  FROM WDS.HOURDB
+  WHERE TIME >= :t_start AND TIME <= :t_end
+  ORDER BY SENID, TIME
+
+hourdb_hourly_station: |
+  SELECT SENID, TIME, V, AVGV
+  FROM WDS.HOURDB
+  WHERE TIME >= :t_start AND TIME <= :t_end AND SENID = :senid
+  ORDER BY TIME

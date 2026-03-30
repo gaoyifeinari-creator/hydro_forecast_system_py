@@ -1,0 +1,14 @@
+# HOURDB：小时表；雨量/蒸发/水位等用 V，流量用 AVGV（与 calculation_app_common 中 extract_station_series 一致）
+# 命名参数由 SQLAlchemy text() 绑定；运行时在 params 中注入 t_start、t_end（及按需 senid）
+
+hourdb_hourly_range: |
+  SELECT SENID, TIME, V, AVGV
+  FROM HOURDB
+  WHERE TIME >= :t_start AND TIME <= :t_end
+  ORDER BY SENID, TIME
+
+hourdb_hourly_station: |
+  SELECT SENID, TIME, V, AVGV
+  FROM HOURDB
+  WHERE TIME >= :t_start AND TIME <= :t_end AND SENID = :senid
+  ORDER BY TIME

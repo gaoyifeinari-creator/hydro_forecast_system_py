@@ -1,0 +1,14 @@
+hourdb_hourly_range: |
+  SELECT SENID, TIME, V, AVGV
+  FROM HOURDB
+  WHERE TIME >= TO_TIMESTAMP(:t_start, 'YYYY-MM-DD HH24:MI:SS')
+    AND TIME <= TO_TIMESTAMP(:t_end, 'YYYY-MM-DD HH24:MI:SS')
+  ORDER BY SENID, TIME
+
+hourdb_hourly_station: |
+  SELECT SENID, TIME, V, AVGV
+  FROM HOURDB
+  WHERE TIME >= TO_TIMESTAMP(:t_start, 'YYYY-MM-DD HH24:MI:SS')
+    AND TIME <= TO_TIMESTAMP(:t_end, 'YYYY-MM-DD HH24:MI:SS')
+    AND SENID = :senid
+  ORDER BY TIME

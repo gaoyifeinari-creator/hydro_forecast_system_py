@@ -22,3 +22,8 @@ Thumbs.db
 # Local env / secrets
 .env
 .env.local
+
+# 本地数据库凭据（从 *.example.json 复制后改名）
+configs/dameng_services.json
+configs/station_hourly_database.json
+configs/floodForecastJdbc.json

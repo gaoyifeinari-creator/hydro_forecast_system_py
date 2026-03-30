@@ -1,0 +1,13 @@
+# SQL Server：TIME 为保留字时用方括号
+
+hourdb_hourly_range: |
+  SELECT SENID, [TIME], V, [AVGV]
+  FROM HOURDB
+  WHERE [TIME] >= :t_start AND [TIME] <= :t_end
+  ORDER BY SENID, [TIME]
+
+hourdb_hourly_station: |
+  SELECT SENID, [TIME], V, [AVGV]
+  FROM HOURDB
+  WHERE [TIME] >= :t_start AND [TIME] <= :t_end AND SENID = :senid
+  ORDER BY [TIME]

@@ -1,0 +1,13 @@
+# PostgreSQL：若列名为保留字，使用双引号
+
+hourdb_hourly_range: |
+  SELECT SENID, "TIME", V, "AVGV"
+  FROM HOURDB
+  WHERE "TIME" >= CAST(:t_start AS timestamp) AND "TIME" <= CAST(:t_end AS timestamp)
+  ORDER BY SENID, "TIME"
+
+hourdb_hourly_station: |
+  SELECT SENID, "TIME", V, "AVGV"
+  FROM HOURDB
+  WHERE "TIME" >= CAST(:t_start AS timestamp) AND "TIME" <= CAST(:t_end AS timestamp) AND SENID = :senid
+  ORDER BY "TIME"

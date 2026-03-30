@@ -8,19 +8,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from calculation_app_common import (
+    DEFAULT_FLOOD_JDBC_CONFIG,
     PROJECT_ROOT,
     build_observed_flows,
     build_station_packages,
     build_times,
-    load_csv as _load_csv_base,
+    load_rain_flow_for_calculation,
     write_temp_config_with_periods,
 )
 from hydro_engine.io.json_config import load_scheme_from_json, run_calculation_from_json
-
-
-@st.cache_data(show_spinner=False)
-def _load_csv(path: str) -> pd.DataFrame:
-    return _load_csv_base(path)
 
 
 def _plot_series_group(title: str, data: Dict[str, List[float]], times: pd.DatetimeIndex) -> None:
@@ -46,8 +42,8 @@ def main() -> None:
     with st.sidebar:
         st.header("输入设置")
         config_path = st.text_input("预报方案配置文件", value=default_cfg)
-        rain_csv = st.text_input("雨量 CSV（V 字段）", value=default_rain)
-        flow_csv = st.text_input("流量 CSV（AVGV 字段）", value=default_flow)
+        rain_csv = st.text_input("雨量/气象 CSV 或 DB 配置 JSON（HOURDB：V）", value=default_rain)
+        flow_csv = st.text_input("流量 CSV 或 DB 配置 JSON（HOURDB：AVGV；可同左）", value=default_flow)
 
         warmup_start = st.text_input("计算开始时间", value="2024-01-01 01:00:00")
         time_type = st.selectbox("时间类型", options=["Hour", "Day", "Minute"], index=0)
@@ -89,8 +85,15 @@ def main() -> None:
             count=time_context.step_count,
         )
 
-        rain_df = _load_csv(rain_csv)
-        flow_df = _load_csv(flow_csv)
+        t0 = times[0].to_pydatetime()
+        t1 = times[-1].to_pydatetime()
+        rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
+            jdbc_config_path=jdbc_path.strip(),
+            rain_csv=rain_csv.strip(),
+            flow_csv=flow_csv.strip(),
+            time_start=t0,
+            time_end=t1,
+        )
 
         station_packages, warn_a = build_station_packages(
             binding_specs,
@@ -99,6 +102,7 @@ def main() -> None:
             time_context.warmup_start_time,
             time_context.time_delta,
         )
+        warn_a = jdbc_warns + warn_a
         observed_flows, warn_b = build_observed_flows(
             scheme,
             flow_df,

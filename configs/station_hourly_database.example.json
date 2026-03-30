@@ -1,0 +1,10 @@
+{
+  "type": "database",
+  "label": "hourdb",
+  "service": "WDS",
+  "services_file": "floodForecastJdbc.json",
+  "dialect": "dameng",
+  "sql_key": "hourdb_hourly_range",
+  "params": {},
+  "_comment": "独立 database 片段示例；亦可直接使用 configs/floodForecastJdbc.json（仅 services + 可选 hourly_service），表名/模式在 sql/dameng.yaml。"
+}

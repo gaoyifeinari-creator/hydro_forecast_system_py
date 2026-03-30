@@ -1,0 +1,20 @@
+{
+  "_comment": "复制为 configs/floodForecastJdbc.json 并填写连接信息；已加入 .gitignore。本文件只描述数据库服务连接（SQLAlchemy URL 内含账号密码）。测站小时 SQL 的表名/模式写在 hydro_engine/read_data/sql/<方言>.yaml。",
+  "dialect": "dameng",
+  "driver_jdbc": "dm.jdbc.driver.DmDriver",
+  "hourly_service": "WDS",
+  "services": [
+    {
+      "service": "WDS",
+      "url": "dm+dmPython://WDS:CHANGE_ME@HOST:5236/WDS",
+      "maxCon": 7,
+      "minCon": 3
+    },
+    {
+      "service": "PUB",
+      "url": "dm+dmPython://PUBUSER:CHANGE_ME@HOST:5236/pubuser",
+      "maxCon": 7,
+      "minCon": 3
+    }
+  ]
+}
