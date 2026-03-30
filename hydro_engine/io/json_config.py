@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from hydro_engine.core.context import (
     ForecastTimeContext,
@@ -354,6 +354,27 @@ def load_scheme_from_json(
         )
         scheme.add_reach(reach)
 
+    # ------------------------------------------------------------
+    # Catchment 拓扑推导：配置层面尽量只保留单向关联。
+    #
+    # - 节点侧：`nodes[].local_catchment_ids` 指定哪些子流域挂在该节点上（由此得到 catchment -> owner_node）
+    #
+    # 当 catchment 配置缺失 `downstream_node_id` 时，自动回退：
+    #   downstream_node_id := owner_node
+    # ------------------------------------------------------------
+    catchment_owner_node_id: Dict[str, str] = {}
+    for node_id, node in scheme.nodes.items():
+        for cid in list(getattr(node, "local_catchment_ids", []) or []):
+            cid = str(cid).strip()
+            if not cid:
+                continue
+            if cid in catchment_owner_node_id and catchment_owner_node_id[cid] != str(node_id):
+                raise ValueError(
+                    f"Catchment '{cid}' is mounted on multiple nodes: "
+                    f"{catchment_owner_node_id[cid]} and {node_id}"
+                )
+            catchment_owner_node_id[cid] = str(node_id)
+
     for catchment_data in config_src.get("catchments", []):
         runoff_model = _build_model(catchment_data["runoff_model"])
         routing_model_data = catchment_data.get("routing_model")
@@ -362,13 +383,32 @@ def load_scheme_from_json(
                 f"Catchment '{catchment_data.get('id', '')}' must include 'routing_model'."
             )
         routing_model = _build_model(routing_model_data)
-        downstream_node_id = str(catchment_data.get("downstream_node_id", "")).strip()
-        if not downstream_node_id:
-            raise ValueError(
-                f"Catchment '{catchment_data.get('id', '')}' must include 'downstream_node_id'."
-            )
+
+        catchment_id = str(catchment_data["id"]).strip()
+        configured_downstream_node_id = str(catchment_data.get("downstream_node_id", "")).strip()
+
+        if not configured_downstream_node_id:
+            owner_node_id = catchment_owner_node_id.get(catchment_id, "")
+            if not owner_node_id:
+                raise ValueError(
+                    f"Catchment '{catchment_id}' is not mounted on any node.local_catchment_ids"
+                )
+            # 以配置员维护的“节点->子流域归属关系”为单向真相：
+            # catchment.outflow 注入到 owner node 本身（由 catchment.routing_model 完成子流域到节点的过程）。
+            downstream_node_id = owner_node_id
+        else:
+            downstream_node_id = configured_downstream_node_id
+            # 如果给了 downstream_node_id，就做一致性校验：它应该与 owner node 一致。
+            owner_node_id = catchment_owner_node_id.get(catchment_id, "")
+            if owner_node_id:
+                if downstream_node_id != owner_node_id:
+                    raise ValueError(
+                        f"Catchment '{catchment_id}' downstream_node_id='{downstream_node_id}' conflicts with "
+                        f"nodes.local_catchment_ids owner_node_id='{owner_node_id}'."
+                    )
+
         catchment = SubCatchment(
-            id=catchment_data["id"],
+            id=catchment_id,
             runoff_model=runoff_model,
             routing_model=routing_model,
             downstream_node_id=downstream_node_id,

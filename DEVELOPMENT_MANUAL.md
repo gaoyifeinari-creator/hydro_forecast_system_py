@@ -397,6 +397,8 @@ JSON 示例：
 |------|------|
 | `id` | 子流域 ID（与节点 `local_catchment_ids` 对应） |
 | `runoff_model` | `name` + `params` + 可选 `state` |
+| `routing_model` | `name` + `params`（必填：子流域演进的洪水过程模型） |
+| `downstream_node_id` | 否 | 子流域演进后注入的下游节点 ID。推荐省略：当缺省时会直接回退为该子流域所属节点（`nodes[].local_catchment_ids` 对应的 owner node），即 catchment 的输出将注入到 owner 节点本身。若配置了该字段，则要求与 owner node 一致 |
 
 支持的产流模型名（注册表）：`XinanjiangRunoffModel`、`XinanjiangCSRunoffModel`、`TankRunoffModel`、`DummyRunoffModel`、`SnowmeltRunoffModel` 等。
 

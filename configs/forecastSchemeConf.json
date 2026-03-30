@@ -116,7 +116,6 @@
       "catchments": [
         {
           "id": "4101",
-          "downstream_node_id": "1041",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -159,7 +158,6 @@
         },
         {
           "id": "4301",
-          "downstream_node_id": "1043",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -202,7 +200,6 @@
         },
         {
           "id": "4302",
-          "downstream_node_id": "1043",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -246,7 +243,6 @@
         },
         {
           "id": "3901",
-          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -289,7 +285,6 @@
         },
         {
           "id": "3902",
-          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -332,7 +327,6 @@
         },
         {
           "id": "3903",
-          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {

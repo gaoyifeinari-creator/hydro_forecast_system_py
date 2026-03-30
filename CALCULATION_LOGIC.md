@@ -41,9 +41,8 @@
 
 - `runoff_model`
 - `routing_model`
-- `downstream_node_id`
 
-否则会在加载或计算校验阶段报错。
+`downstream_node_id` 不再强制写在配置中：当缺失时，会根据“该子流域所属节点（`nodes[].local_catchment_ids`）”直接回退为 owner node；即 catchment 输出注入到 owner 节点本身。
 
 ---
 
@@ -169,4 +168,4 @@
 - `catchment` 必须先经过自身 `routing_model` 演进
 - 再注入 `downstream_node_id` 对应节点参与汇流
 
-因此配置中 `catchments[]` 的 `routing_model` 和 `downstream_node_id` 为必填项。
+因此配置中 `catchments[]` 的 `routing_model` 为必填项；`downstream_node_id` 在缺省时将由节点侧拓扑推导。

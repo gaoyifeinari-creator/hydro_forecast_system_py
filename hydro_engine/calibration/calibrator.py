@@ -20,7 +20,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -272,6 +272,32 @@ class ObjectiveFunction:
             node_obs_map  = build_node_observed_flow_series(scm, win_obs)
             cat_obs       = build_catchment_observed_flow_series(scm, node_obs_map)
 
+            # 如果配置中缺失 `catchments[].downstream_node_id`，则根据：
+            # - catchment 所属节点：`nodes[].local_catchment_ids`
+            # - 拓扑推导：`reaches[].upstream_node_id/downstream_node_id`
+            # 来推导 downstream_node_id（用于选择“该下游节点的入库/接力实测站”）。
+            nodes_cfg = cfg["schemes"][0].get("nodes", [])
+            reaches_cfg = cfg["schemes"][0].get("reaches", [])
+            catchment_owner_node_id: Dict[str, str] = {}
+            for n in nodes_cfg:
+                nid = str(n.get("id", "")).strip()
+                if not nid:
+                    continue
+                for cid in n.get("local_catchment_ids", []) or []:
+                    cid_s = str(cid).strip()
+                    if not cid_s:
+                        continue
+                    # 多节点挂载在运行阶段会直接报错；这里做“保守取第一个”不影响目标计算。
+                    catchment_owner_node_id.setdefault(cid_s, nid)
+
+            node_outgoing_downstream_node_ids: Dict[str, Set[str]] = {}
+            for r in reaches_cfg:
+                up = str(r.get("upstream_node_id", "")).strip()
+                dn = str(r.get("downstream_node_id", "")).strip()
+                if not up or not dn:
+                    continue
+                node_outgoing_downstream_node_ids.setdefault(up, set()).add(dn)
+
             # 运行
             output = run_calculation_from_json(
                 tmp.name, win_station_packages,
@@ -288,7 +314,12 @@ class ObjectiveFunction:
             scores: List[float] = []
             for cat in cfg["schemes"][0].get("catchments", []):
                 cid   = str(cat["id"])
-                dnid  = str(cat.get("downstream_node_id", ""))
+                dnid  = str(cat.get("downstream_node_id", "")).strip()
+                if not dnid:
+                    owner = catchment_owner_node_id.get(cid, "")
+                    candidates = node_outgoing_downstream_node_ids.get(owner, set()) if owner else set()
+                    if len(candidates) == 1:
+                        dnid = next(iter(candidates))
                 node_cfg = next(
                     (n for n in cfg["schemes"][0]["nodes"] if n["id"] == dnid),
                     None,

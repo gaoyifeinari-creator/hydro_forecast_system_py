@@ -194,6 +194,21 @@ python -m unittest discover -v
 3. 若 `SENID/TIME` 列名大小写不一致：
    - 依赖 `normalize_station_dataframe` 的 `.upper()` 机制进行归一化；如仍失败，需要调整 SQL 返回列别名。
 
+### 10.5 拓扑冗余清理：`catchments[].downstream_node_id` 变为可选
+
+为避免配置员维护遗漏导致“拓扑矛盾”（双向冗余），现在推荐配置层面只保留单向关联：
+
+- `nodes[].local_catchment_ids`：子流域归属到哪个节点（单向真相）
+- `reaches[].upstream_node_id/downstream_node_id`：水系拓扑（河道演进用）
+
+配置加载时的规则：
+
+- 若 `catchments[].downstream_node_id` 缺失，则自动回退为其所属的 owner 节点（即对应 `nodes[].local_catchment_ids` 里的 node id）。
+- 若 `catchments[].downstream_node_id` 存在，则要求与 owner 节点一致（不一致会在加载阶段直接报错）。
+
+另外，为减少桌面端“节点全 0 误判”的问题：
+- `desktop_calculation_app.py` 在节点缺失 `node_total_inflows` 序列时，表格显示空值（None）而不是填 `0.0`。
+
 ---
 
 ## 11. 版本与变更记录（摘要）
@@ -203,6 +218,7 @@ python -m unittest discover -v
 | **2026-03-25** | 初版交接：Node-Link、多维强迫、JSON、水库/分流/新安江等。 |
 | **2026-03-25**（更新） | 补充：`ForecastTimeContext` 与四段步数、`schemes` 自包含、`warmup_start_time` 运行时传入；`XinanjiangRunoffModel`/`XinanjiangCSRunoffModel` 与 Java 对齐；`calibration_bounds`；`CalculationEngine` 与校正链；测试与 API 表更新。 |
 | **2026-03-25**（更新 2） | `DEVELOPMENT_MANUAL.md` 全面对齐：`schemes`/`catchment_forcing_bindings`、`ForcingData` 示例、产流模型与测试列表、§11 差异摘要；与 `HANDOVER` 交叉引用。 |
+| **2026-03-30**（更新 3） | 解决拓扑冗余导致的 `downstream_node_id` 推导问题：缺失时回退为 owner 节点；并修复桌面端“节点全 0 误判”的展示逻辑。 |
 
 ---
 

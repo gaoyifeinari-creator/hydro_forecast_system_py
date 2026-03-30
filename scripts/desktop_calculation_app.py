@@ -989,7 +989,15 @@ class DesktopCalculationApp:
             ax.set_title(title)
             ax.text(0.5, 0.5, "无数据", ha="center", va="center", transform=ax.transAxes)
             self._panel_data[panel] = {}
-            self._refresh_panel_table(panel, times, [0.0] * len(times), [0.0] * len(times), [None] * len(times))
+            # 当 forecast_inflow_map 缺失时，真实含义是“该节点没有总入库流量序列”。
+            # 这里把表格填空而不是填 0，避免误判为“计算结果为 0”。
+            self._refresh_panel_table(
+                panel,
+                times,
+                [None] * len(times),
+                [None] * len(times),
+                [None] * len(times),
+            )
             return
 
         qf_in = list(forecast_inflow_map.get(key, []))

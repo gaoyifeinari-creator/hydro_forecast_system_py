@@ -200,7 +200,6 @@
       "catchments": [
         {
           "id": "CA",
-          "downstream_node_id": "N3",
           "routing_model": {
             "name": "DummyRoutingModel",
             "params": {
@@ -238,7 +237,6 @@
         },
         {
           "id": "CB",
-          "downstream_node_id": "N3",
           "routing_model": {
             "name": "DummyRoutingModel",
             "params": {
