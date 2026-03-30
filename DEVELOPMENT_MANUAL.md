@@ -79,8 +79,12 @@ hydro_project/
 **依赖**：需安装 `networkx`（拓扑与 DAG 校验）。
 
 引擎层新增数据读取模块：`hydro_engine/read_data/`（与 `processing` 同级），
-按 `file / database / api` 三类方式分别由独立文件管理。当前已实现文件读取，
-数据库与外部接口为预留占位实现（`NotImplementedError`）。
+按 `file / database / api` 三类方式分别由独立文件管理。当前已实现：
+
+- 文件读取（CSV / 本地文件）与统一字段标准化；
+- 数据库读取（`SQLAlchemy + YAML 外置 SQL + Pandas`），支持连接池复用与（YAML）解析缓存。
+
+外部接口（`api`）仍为预留占位实现（`NotImplementedError`）。
 
 ---
 
@@ -122,13 +126,34 @@ hydro_project/
   - 主要内容：文件读取实现（`FileDataReader`）与标准化（`normalize_station_dataframe`）。
   - 关键点：统一约束输入必须有 `SENID`、`TIME`，并生成 `TIME_DT`。
 - `hydro_engine/read_data/database_reader.py`
-  - 主要内容：数据库读取占位实现（后续接 DB connector/query）。
+  - 主要内容：数据库读取实现（`SQLAlchemy` 执行外置 `sql/<dialect>.yaml` 查询），
+    返回站点小时数据 DataFrame，并进行 `SENID/TIME` 字段校验与标准化。
+  - 关键点：
+    - 连接池复用：进程内按 `(url, pool_min, max_overflow)` 缓存 `Engine`；
+    - YAML 缓存：通过文件 `mtime` 失效的方式缓存 YAML 解析结果；
+    - 参数绑定：使用 SQLAlchemy 的 `conn.execute(stmt, params)` 执行，避免部分 DBAPI/pandas 兼容坑；
+    - 达梦特殊处理：`dmSQLAlchemy` 的路径 `database=` 会映射到 `dmPython` 的 `schema=`（代码内自动处理）。
 - `hydro_engine/read_data/api_reader.py`
   - 主要内容：外部 API 读取占位实现（后续接 HTTP 请求/鉴权/解析）。
 - `hydro_engine/read_data/factory.py`
   - 主要内容：读取器工厂（`build_data_reader`）与统一入口（`read_station_data`）。
 - `hydro_engine/read_data/__init__.py`
   - 主要内容：对外导出读取层公共 API，供脚本层/服务层调用。
+
+### 数据库读取配置约定（达梦示例）
+
+数据库读取由 `hydro_engine/read_data/database_reader.py` 实现，统一约定：
+
+- 连接配置：`configs/floodForecastJdbc.json`
+  - 仅维护数据库服务连接信息；
+  - 达梦场景推荐使用 **SQLAlchemy URL**（`dm+dmPython://...`），避免 JDBC URL 的协议不匹配；
+  - 多服务时可用 `hourly_service` 指定 `load_station_hourly_frame(...)` 读取小时表用哪个服务。
+- SQL 配置：`hydro_engine/read_data/sql/<dialect>.yaml`
+  - 具体到 schema/表名/字段选择都写在这里（例如 `dameng.yaml` 的 `hourdb_hourly_range` / `hourdb_hourly_station`）；
+  - `sql_key` 选择 YAML 里的哪个查询逻辑片段。
+- 运行时参数绑定：通过 SQLAlchemy `:t_start/:t_end` 等占位符参数传入（代码内使用 `conn.execute(stmt, params)` 执行）。
+
+如果后续更换表名或 schema，只需要更新 `sql/<dialect>.yaml`，不必改动数据库连接文件。
 
 ### `hydro_engine/domain/`
 

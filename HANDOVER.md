@@ -82,7 +82,30 @@ python -m unittest discover -v
 
 ---
 
-## 6. 配置与文档路径
+## 6. 数据库（达梦示例）与配置要点
+
+关系库读取使用 `SQLAlchemy + YAML 外置 SQL + Pandas`。以达梦（DM）为例：
+
+1. 选择用于运行的 Python 环境（建议 Python 3.9+ / 3.10+）。
+2. 安装依赖：
+   - `dmpython`（数据库驱动）
+   - `dmSQLAlchemy`（SQLAlchemy 方言适配）
+   - `sqlalchemy`、`pandas`、`PyYAML`
+3. 配置数据库连接：`configs/floodForecastJdbc.json`
+   - 该文件现在只维护 `services[]` 中的连接信息（SQLAlchemy URL：`dm+dmPython://user:pass@host:port/schema`）；
+   - 若存在多个 service，可通过 `hourly_service` 指定读取 HOURDB（小时表）使用哪个 service。
+4. 配置 SQL 查询：`hydro_engine/read_data/sql/dameng.yaml`
+   - `hourdb_hourly_range` / `hourdb_hourly_station` 等查询逻辑在此维护；
+   - 表名/模式/字段选择都写在 YAML 中，连接文件无需改动。
+
+常见验证方式：
+
+- 桌面端/Web 端传入 `jdbc_config_path=configs/floodForecastJdbc.json` 后读取 HOURDB；
+- 或直接调用 `load_station_hourly_frame(ref, time_start=..., time_end=...)`。
+
+---
+
+## 7. 配置与文档路径
 
 | 路径 | 内容 |
 |------|------|
