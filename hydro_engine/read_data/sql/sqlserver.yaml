@@ -6,6 +6,12 @@ hourdb_hourly_range: |
   WHERE [TIME] >= :t_start AND [TIME] <= :t_end
   ORDER BY SENID, [TIME]
 
+hourdb_hourly_range_in: |
+  SELECT SENID, [TIME], V, [AVGV]
+  FROM HOURDB
+  WHERE [TIME] >= :t_start AND [TIME] <= :t_end AND SENID IN :senids
+  ORDER BY SENID, [TIME]
+
 hourdb_hourly_station: |
   SELECT SENID, [TIME], V, [AVGV]
   FROM HOURDB

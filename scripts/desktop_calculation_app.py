@@ -19,15 +19,19 @@ PROJECT_ROOT = SCRIPTS_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from calculation_app_common import (
-    DEFAULT_FLOOD_JDBC_CONFIG,
+from hydro_engine.io.calculation_app_data_builder import (
     build_catchment_observed_flow_series,
     build_catchment_precip_series,
     build_node_observed_flow_series,
     build_node_precip_series,
     build_observed_flows,
     build_station_packages,
+)
+from hydro_engine.io.calculation_app_data_loader import (
+    DEFAULT_FLOOD_JDBC_CONFIG,
     build_times,
+    collect_observed_flow_station_ids,
+    collect_rain_station_ids,
     load_rain_flow_for_calculation,
     read_config,
 )
@@ -176,12 +180,18 @@ def run_calculation_pipeline(
 
     t0 = times[0].to_pydatetime()
     t1 = times[-1].to_pydatetime()
+
+    rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
+    flow_senids = sorted(list(collect_observed_flow_station_ids(scheme)))
+
     rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
         jdbc_config_path=jdbc_config_path,
         rain_csv=rain_csv,
         flow_csv=flow_csv,
         time_start=t0,
         time_end=t1,
+        rain_senids=rain_senids,
+        flow_senids=flow_senids,
     )
 
     station_packages, warn_a = build_station_packages(

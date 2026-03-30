@@ -6,17 +6,21 @@ from typing import Any, Dict, List
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from pathlib import Path
 
-from calculation_app_common import (
+from calculation_app_common import write_temp_config_with_periods
+from hydro_engine.io.calculation_app_data_builder import build_observed_flows, build_station_packages
+from hydro_engine.io.calculation_app_data_loader import (
     DEFAULT_FLOOD_JDBC_CONFIG,
-    PROJECT_ROOT,
-    build_observed_flows,
-    build_station_packages,
     build_times,
+    collect_observed_flow_station_ids,
+    collect_rain_station_ids,
     load_rain_flow_for_calculation,
-    write_temp_config_with_periods,
 )
 from hydro_engine.io.json_config import load_scheme_from_json, run_calculation_from_json
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPTS_DIR.parent
 
 
 def _plot_series_group(title: str, data: Dict[str, List[float]], times: pd.DatetimeIndex) -> None:
@@ -87,12 +91,17 @@ def main() -> None:
 
         t0 = times[0].to_pydatetime()
         t1 = times[-1].to_pydatetime()
+        rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
+        flow_senids = sorted(list(collect_observed_flow_station_ids(scheme)))
+
         rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
             jdbc_config_path=jdbc_path.strip(),
             rain_csv=rain_csv.strip(),
             flow_csv=flow_csv.strip(),
             time_start=t0,
             time_end=t1,
+            rain_senids=rain_senids,
+            flow_senids=flow_senids,
         )
 
         station_packages, warn_a = build_station_packages(

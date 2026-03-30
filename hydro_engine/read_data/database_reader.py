@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 from functools import lru_cache
 
 import pandas as pd
@@ -38,7 +38,7 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 try:
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine, text, bindparam
     from sqlalchemy.engine import Engine
     from sqlalchemy.engine.url import URL
 except ImportError as exc:  # pragma: no cover
@@ -188,7 +188,14 @@ class DatabaseDataReader(IDataReader):
 
         yaml_path = _resolve_yaml_path(dialect, opts)
         sql_map = _load_sql_map(yaml_path)
-        sql_text = _pick_sql(sql_map, sql_key)
+        try:
+            sql_text = _pick_sql(sql_map, sql_key)
+        except KeyError:
+            # 兼容：如果请求的是 *_in，但 YAML 没配，就回退到原 key
+            if sql_key.endswith("_in"):
+                sql_text = _pick_sql(sql_map, sql_key[: -len("_in")])
+            else:
+                raise
 
         stmt = text(sql_text)
         engine = get_shared_engine(str(url).strip(), pool_min=pool_min, max_overflow=max_overflow)
@@ -197,11 +204,39 @@ class DatabaseDataReader(IDataReader):
             # 用 SQLAlchemy 自己执行 + 手动落到 DataFrame，规避部分 DBAPI/驱动对
             # ``pandas.read_sql(..., params=...)`` 的兼容性问题。
             if params:
-                result = conn.execute(stmt, params)
+                # IN 查询列表参数：让 SQLAlchemy 展开为 (..., ..., ...)
+                if "senids" in params:
+                    stmt = stmt.bindparams(bindparam("senids", expanding=True))
+
+                senids = params.get("senids")
+                chunk_size = int(opts.get("senid_chunk_size", 0) or 0)
+                if (
+                    senids is not None
+                    and isinstance(senids, (list, tuple, set))
+                    and chunk_size > 0
+                    and len(senids) > chunk_size
+                ):
+                    senids_list = list(senids)
+                    dfs: List[pd.DataFrame] = []
+                    keys = None
+                    for i in range(0, len(senids_list), chunk_size):
+                        chunk = senids_list[i : i + chunk_size]
+                        p2 = dict(params)
+                        p2["senids"] = chunk
+                        result = conn.execute(stmt, p2)
+                        rows = result.fetchall()
+                        if keys is None:
+                            keys = result.keys()
+                        dfs.append(pd.DataFrame(rows, columns=keys))
+                    df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame(columns=keys or [])
+                else:
+                    result = conn.execute(stmt, params)
+                    rows = result.fetchall()
+                    df = pd.DataFrame(rows, columns=result.keys())
             else:
                 result = conn.execute(stmt)
-            rows = result.fetchall()
-            df = pd.DataFrame(rows, columns=result.keys())
+                rows = result.fetchall()
+                df = pd.DataFrame(rows, columns=result.keys())
 
         if normalize:
             from .file_reader import normalize_station_dataframe

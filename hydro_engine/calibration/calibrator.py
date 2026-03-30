@@ -26,7 +26,6 @@ import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from hydro_engine.calibration.sceua import SCEUAConfig, SCEUAOptimizer
@@ -34,12 +33,14 @@ from hydro_engine.core.forcing import ForcingData
 from hydro_engine.core.timeseries import TimeSeries
 from hydro_engine.io.json_config import load_scheme_from_json, run_calculation_from_json
 
-from calculation_app_common import (
+from hydro_engine.io.calculation_app_data_builder import (
+    build_catchment_observed_flow_series,
     build_catchment_precip_series,
     build_node_observed_flow_series,
-    build_catchment_observed_flow_series,
     build_observed_flows,
     build_station_packages,
+)
+from hydro_engine.io.calculation_app_data_loader import (
     build_times,
     load_rain_flow_for_calculation,
     read_config,

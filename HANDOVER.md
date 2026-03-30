@@ -143,7 +143,60 @@ python -m unittest discover -v
 
 ---
 
-## 10. 版本与变更记录（摘要）
+## 10. 本次修改交接（数据库读取效率 + 结构拆分）
+
+本轮主要目标是提升“多测站数据库读取”的效率，避免真实库（几百万 `SENID`）场景下的全量扫描；同时做职责拆分，让 `hydro_engine` 不再长期依赖 `scripts/` 层的公共逻辑。
+
+### 10.1 测站读取效率：`SENID IN` + 分块
+
+在数据库读取层（`hydro_engine/read_data/database_reader.py`）新增对 `params["senids"]` 的支持：
+- YAML SQL 中使用 `SENID IN :senids`
+- SQLAlchemy 使用 `expanding=True` 将列表参数展开
+- 当 `senids` 很长时，按 `senid_chunk_size` 自动分块查询并汇总结果
+
+达梦/各方言 YAML 新增 `hourdb_hourly_range_in`（用于 `IN` 查询）：
+- `hydro_engine/read_data/sql/dameng.yaml`
+- `hydro_engine/read_data/sql/mysql.yaml`
+- `hydro_engine/read_data/sql/oracle.yaml`
+- `hydro_engine/read_data/sql/postgresql.yaml`
+- `hydro_engine/read_data/sql/sqlserver.yaml`
+
+### 10.2 应用如何传入“本次需要的 SENID”
+
+桌面端/Web 入口在加载 `scheme` 后，会先统计本次计算真正用到的测站集合，再传给数据库读取：
+- 雨量/PET：从 `binding_specs` 扫描 `PRECIPITATION` 以及 `POTENTIAL_EVAPOTRANSPIRATION`（仅当 `use_station_pet=true`）
+- 实测流量：从 `scheme.nodes` 聚合 `observed_station_id` 与 `observed_inflow_station_id`
+
+相关实现入口在新增模块：
+- `hydro_engine/io/calculation_app_data_loader.py`
+
+数据库读取函数新增参数：
+- `load_rain_flow_for_calculation(..., rain_senids=..., flow_senids=..., senid_chunk_size=...)`
+- `load_station_hourly_frame(..., senids=..., senid_chunk_size=...)`
+
+### 10.3 结构拆分（方案B：阶段1+2）
+
+新增引擎层模块替代 `scripts/calculation_app_common.py` 中的“读数/拼装”职责：
+- `hydro_engine/io/calculation_app_data_loader.py`：读数/连库/测站集合统计/`IN` 策略
+- `hydro_engine/io/calculation_app_data_builder.py`：df -> `ForcingData` / `TimeSeries` 的拼装
+
+入口依赖关系已更新：
+- `hydro_engine/calibration/calibrator.py`：不再依赖 `scripts/calculation_app_common.py` 的读数/拼装逻辑
+- `scripts/desktop_calculation_app.py`：改为依赖 `hydro_engine/io/*`
+- `scripts/web_calculation_app.py`：改为依赖 `hydro_engine/io/*`
+
+### 10.4 注意事项（给后续智能体）
+
+1. `scripts/calculation_app_common.py` 已瘦身为“薄封装/重导出”，不再包含读数与拼装的重复实现；如果后续需要继续清理，可以逐步减少对其的历史性依赖（测试/入口已尽量迁移到 `hydro_engine/io/*`）。
+2. 如果遇到 YAML key not found（如 `*_in` 没配）：
+   - 确认对应方言 YAML 是否新增了 `hourdb_hourly_range_in`
+   - 可暂时不传 `senids` 触发回退（用于排障，但不建议用于生产）
+3. 若 `SENID/TIME` 列名大小写不一致：
+   - 依赖 `normalize_station_dataframe` 的 `.upper()` 机制进行归一化；如仍失败，需要调整 SQL 返回列别名。
+
+---
+
+## 11. 版本与变更记录（摘要）
 
 | 日期 | 摘要 |
 |------|------|
