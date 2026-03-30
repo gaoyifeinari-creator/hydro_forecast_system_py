@@ -27,6 +27,12 @@ The project focuses on:
 - **Catchment runoff parallelization**:
   - `catchment_workers=1` for single-thread
   - `None`/`<=0` for auto worker estimation
+- **Automatic calibration (SCE-UA)**:
+  - Global optimization for Xinanjiang / Xinanjiang CS parameters (`hydro_engine.calibration`)
+  - Entry script: `scripts/run_sceua_calibration.py` — writes `output/calibration/` and optional `configs/calibrated_scheme.json`
+- **Rolling forecast evaluation**:
+  - Long-run historical-simulation tests with RE / KGE / NSE: `tests/test_rolling_forecast_eval.py`
+  - Example outputs under `output/rolling_forecast_eval/` (large CSV/JSON; regenerate locally if needed)
 
 ---
 
@@ -58,10 +64,11 @@ The JSON config loader (`json_config._build_model`) will now automatically find 
 
 ```text
 hydro_project/
-├── configs/                    # Scheme examples and test configs
+├── configs/                    # Scheme JSON (e.g. forecastSchemeConf, calibrated_scheme)
 ├── docs/                       # Architecture docs
 ├── hydro_engine/
 │   ├── core/                   # Context, TimeSeries, Forcing, interfaces
+│   ├── calibration/            # SCE-UA + HydroModelCalibrator
 │   ├── processing/             # Station -> catchment forcing synthesis
 │   ├── read_data/              # Data readers: file / database / api
 │   ├── domain/                 # Catchment, Reach, Node domain objects
@@ -71,8 +78,9 @@ hydro_project/
 │   │   └── correction/         # Error updater models
 │   ├── engine/                 # Scheme + calculator
 │   └── io/                     # JSON loading and calculation API
-├── scripts/                    # Desktop/Web apps and helper scripts
-└── tests/                      # Unit/integration tests
+├── output/                     # Generated results (calibration, rolling eval); may be large
+├── scripts/                    # Apps, run_sceua_calibration.py, helpers
+└── tests/                      # Unit/integration + rolling forecast eval
 ```
 
 ---
@@ -88,8 +96,10 @@ hydro_project/
 Install minimal dependencies:
 
 ```bash
-pip install networkx pandas matplotlib
+pip install networkx pandas matplotlib numpy
 ```
+
+(`numpy` is required for calibration and evaluation scripts.)
 
 ### 2) Run Desktop App
 
@@ -108,6 +118,24 @@ start_desktop_app.bat
 ```bash
 python -m unittest discover -v
 ```
+
+### 4) SCE-UA calibration (optional)
+
+From the `hydro_project` directory, after placing rain/flow CSV paths as configured in `scripts/run_sceua_calibration.py`:
+
+```bash
+python scripts/run_sceua_calibration.py
+```
+
+Outputs: `output/calibration/` (parameters, eval CSVs) and `configs/calibrated_scheme.json` when the script completes successfully.
+
+### 5) Rolling forecast evaluation (optional)
+
+```bash
+python tests/test_rolling_forecast_eval.py
+```
+
+Writes under `output/rolling_forecast_eval/`; the run can take a long time (many daily origins).
 
 ---
 
@@ -286,4 +314,32 @@ Current apps use file reading by default.
 - Calculation flow notes: `CALCULATION_LOGIC.md`
 - Handover summary: `HANDOVER.md`
 - Forcing architecture: `docs/FORCING_DATA_ARCHITECTURE.md`
+
+---
+
+## Repository and GitHub
+
+- **Repository**: [gaoyifeinari-creator/hydro_forecast_system_py](https://github.com/gaoyifeinari-creator/hydro_forecast_system_py)
+- **Clone** (HTTPS):
+
+  ```bash
+  git clone https://github.com/gaoyifeinari-creator/hydro_forecast_system_py.git
+  cd hydro_forecast_system_py
+  ```
+
+  Work in the repository root where `hydro_engine/` and `configs/` live (this README assumes that layout).
+
+- **Push** (SSH recommended if HTTPS to GitHub is unstable):
+
+  ```bash
+  git remote add origin git@github.com:gaoyifeinari-creator/hydro_forecast_system_py.git
+  # or: git remote set-url origin git@github.com:gaoyifeinari-creator/hydro_forecast_system_py.git
+  git push origin main
+  ```
+
+  Use a [Personal Access Token](https://github.com/settings/tokens) as the password when using HTTPS, not your GitHub account password.
+
+- **Security**: do not commit tokens or secrets; revoke any token that was ever pasted into a file or chat.
+
+If your team rebased or replaced `main` and you intend to **overwrite** the remote with this copy, coordinate first, then use `git push --force-with-lease origin main` (or `git push --force origin main` only when necessary).
 
