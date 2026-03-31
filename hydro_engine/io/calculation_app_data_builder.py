@@ -8,6 +8,7 @@ Application-level data builder helpers.
 from __future__ import annotations
 
 from datetime import datetime
+import math
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
@@ -51,6 +52,99 @@ def extract_station_series(
         raise ValueError(f"Unsupported fill_mode: {fill_mode}")
 
     return [float(x) for x in s.to_list()]
+
+
+def extract_station_series_keep_nan(
+    df: pd.DataFrame,
+    station_id: str,
+    times: pd.DatetimeIndex,
+    *,
+    value_col: str,
+) -> List[float]:
+    """
+    从 df 中提取某站点的时间序列，但不对缺测做填补。
+
+    - df 中找不到该 SENID 或者缺少 TIME_DT：返回全 NaN
+    - 结果长度与 times 等长，缺测点为 NaN
+    """
+    if value_col not in df.columns:
+        raise ValueError(f"CSV missing value column '{value_col}'")
+    if "TIME_DT" not in df.columns:
+        raise ValueError("CSV missing TIME_DT column")
+
+    sub = df[df["SENID"] == str(station_id)].copy()
+    if sub.empty:
+        return [float("nan")] * len(times)
+
+    sub[value_col] = pd.to_numeric(sub[value_col], errors="coerce")
+    sub = sub.dropna(subset=["TIME_DT"]).sort_values("TIME_DT")
+    if sub.empty:
+        return [float("nan")] * len(times)
+
+    s = sub.groupby("TIME_DT")[value_col].mean().sort_index()
+    s = s.reindex(times)
+    # 保留 NaN，后续用于“按优先级兜底融合”
+    return [float(x) if not (isinstance(x, float) and math.isnan(x)) else float("nan") for x in s.to_list()]
+
+
+def apply_catchment_forecast_fusion_to_station_packages(
+    *,
+    station_packages: Dict[str, ForcingData],
+    fusion_plan: Dict[str, Any],
+    rain_df: pd.DataFrame,
+    times: pd.DatetimeIndex,
+    start_time: datetime,
+    time_step,
+) -> Dict[str, ForcingData]:
+    """
+    对 `catchment_forecast_rules` 生成的“融合虚拟 station_id”做按优先级的逐时兜底融合。
+
+    fusion_plan 结构：
+    - fusion_plan["virtual_bindings"][virtual_station_id] = {
+        "kind": ForcingKind, "source_ids": [真实 subtype source_id...]
+      }
+    """
+    if not fusion_plan:
+        return station_packages
+    vb = fusion_plan.get("virtual_bindings") or {}
+    if not vb:
+        return station_packages
+
+    updated = dict(station_packages)
+    for virtual_id, entry in vb.items():
+        kind = entry.get("kind")
+        if kind is None:
+            continue
+        source_ids = entry.get("source_ids") or []
+        if not source_ids:
+            continue
+
+        # 对每个时间步：取第一个非 NaN 的优先级源值
+        source_series: List[List[float]] = []
+        for sid in source_ids:
+            source_series.append(
+                extract_station_series_keep_nan(rain_df, sid, times, value_col="V")
+            )
+
+        fused_values: List[float] = [float("nan")] * len(times)
+        for i in range(len(times)):
+            chosen = float("nan")
+            for src in source_series:
+                v = src[i]
+                if not (isinstance(v, float) and math.isnan(v)):
+                    chosen = float(v)
+                    break
+            fused_values[i] = chosen
+
+        fused_ts = TimeSeries(start_time=start_time, time_step=time_step, values=fused_values)
+
+        existing = updated.get(virtual_id)
+        if existing is None:
+            updated[virtual_id] = ForcingData.single(kind, fused_ts)
+        else:
+            updated[virtual_id] = existing.with_series(kind, fused_ts)
+
+    return updated
 
 
 def iter_variable_specs(spec: Dict[str, Any]) -> List[Dict[str, Any]]:

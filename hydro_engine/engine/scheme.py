@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import networkx as nx
 
@@ -18,6 +18,10 @@ class ForecastingScheme:
     reaches: Dict[str, RiverReach] = field(default_factory=dict)
     catchments: Dict[str, SubCatchment] = field(default_factory=dict)
     graph: nx.DiGraph = field(default_factory=nx.DiGraph)
+    # 可选：多源面预报面数据的全局规则（由 json_config 解析并挂载到 scheme）
+    catchment_forecast_rules: Dict[str, Any] = field(default_factory=dict)
+    # 可选：由规则解析得到的融合计划（用于 runtime 批量读取与嵌套兜底融合）
+    catchment_forecast_fusion_plan: Dict[str, Any] = field(default_factory=dict)
 
     def add_node(self, node: AbstractNode) -> None:
         if node.id in self.nodes:

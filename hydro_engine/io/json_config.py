@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+import math
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from hydro_engine.core.context import (
     ForecastTimeContext,
@@ -53,6 +54,163 @@ def _normalize_catchment_forcing_bindings(data: Dict[str, Any]) -> List[Dict[str
         }
         for x in legacy
     ]
+
+
+def _forecast_rules_key_to_forcing_kind(key: str) -> ForcingKind:
+    k = str(key).strip().lower()
+    if k == "precipitation":
+        return ForcingKind.PRECIPITATION
+    if k in {"temperature", "air_temperature", "tmp", "t"}:
+        return ForcingKind.AIR_TEMPERATURE
+    raise ValueError(f"Unsupported catchment_forecast_rules key: {key!r}")
+
+
+def _build_catchment_forecast_fusion_plan(
+    rules: Dict[str, Any],
+    catchment_ids: Iterable[str],
+) -> Dict[str, Any]:
+    """
+    从 `catchment_foreast_rules` 生成融合计划。
+
+    约定：
+    - 对每个 rule.key(precipitation/temperature) 与 catchment_id 生成一个“虚拟 station_id”（用于 binding_specs）。
+    - 虚拟 station_id 使用 `source_id_template`，把 `{subtype}` 替换为 `default_profile`。
+    - 真实 source_id 按 `profiles[default_profile]` 的顺序作为优先级数组做逐时嵌套兜底融合。
+    """
+    virtual_bindings: Dict[str, Dict[str, Any]] = {}
+    raw_senids: Set[str] = set()
+    virtual_station_id_by_catchment_kind: Dict[str, Dict[str, str]] = {}
+
+    catchment_ids = [str(c).strip() for c in catchment_ids if str(c).strip()]
+    for rule_key, rule_data in (rules or {}).items():
+        kind = _forecast_rules_key_to_forcing_kind(rule_key)
+        if not isinstance(rule_data, dict):
+            raise ValueError(f"catchment_forecast_rules[{rule_key!r}] must be an object")
+        unit = rule_data.get("unit")
+        source_id_template = str(rule_data.get("source_id_template") or "").strip()
+        default_profile = str(rule_data.get("default_profile") or "").strip()
+        profiles = rule_data.get("profiles") or {}
+
+        if not source_id_template:
+            raise ValueError(f"catchment_forecast_rules[{rule_key!r}] missing source_id_template")
+        if not default_profile:
+            raise ValueError(f"catchment_forecast_rules[{rule_key!r}] missing default_profile")
+        if not isinstance(profiles, dict) or not profiles:
+            raise ValueError(f"catchment_forecast_rules[{rule_key!r}] must include profiles object")
+        if default_profile not in profiles:
+            raise ValueError(
+                f"catchment_forecast_rules[{rule_key!r}] default_profile={default_profile!r} "
+                f"not found in profiles keys {sorted(map(str, profiles.keys()))}"
+            )
+
+        priority_subtypes = profiles[default_profile]
+        if not isinstance(priority_subtypes, list) or not priority_subtypes:
+            raise ValueError(
+                f"catchment_forecast_rules[{rule_key!r}] profiles[{default_profile!r}] must be a non-empty list"
+            )
+        priority_subtypes = [str(x).strip() for x in priority_subtypes if str(x).strip()]
+        if not priority_subtypes:
+            raise ValueError(
+                f"catchment_forecast_rules[{rule_key!r}] profiles[{default_profile!r}] has no valid subtype"
+            )
+
+        # template 校验（仅检查占位符是否能格式化）
+        try:
+            _ = source_id_template.format(subtype=priority_subtypes[0], catchment_id=catchment_ids[0])
+            _ = source_id_template.format(subtype=default_profile, catchment_id=catchment_ids[0])
+        except Exception as exc:
+            raise ValueError(
+                f"catchment_forecast_rules[{rule_key!r}] source_id_template is invalid: {exc!s}"
+            ) from exc
+
+        for cid in catchment_ids:
+            virtual_id = source_id_template.format(subtype=default_profile, catchment_id=cid)
+            source_ids = [
+                source_id_template.format(subtype=subtype, catchment_id=cid)
+                for subtype in priority_subtypes
+            ]
+            raw_senids.update(source_ids)
+
+            virtual_station_id_by_catchment_kind.setdefault(cid, {})[kind.value] = virtual_id
+            virtual_bindings[virtual_id] = {
+                "catchment_id": cid,
+                "kind": kind,
+                "unit": unit,
+                "priority_subtypes": priority_subtypes,
+                "source_ids": source_ids,
+            }
+
+    return {
+        "raw_senids": sorted(raw_senids),
+        "virtual_bindings": virtual_bindings,
+        "virtual_station_id_by_catchment_kind": virtual_station_id_by_catchment_kind,
+    }
+
+
+def _apply_catchment_forecast_rules_to_binding_specs(
+    *,
+    scheme: ForecastingScheme,
+    binding_specs: List[Dict[str, Any]],
+    forecast_rules: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """
+    把 `catchment_forecast_rules` 转成 `binding_specs` 中的站点绑定。
+    - 若 binding_specs 已有该 catchment/kind：不覆盖
+    - 若缺失：补齐（使用虚拟 station_id）
+    """
+    if not forecast_rules:
+        return binding_specs, {}
+
+    fusion_plan = _build_catchment_forecast_fusion_plan(
+        rules=forecast_rules,
+        catchment_ids=scheme.catchments.keys(),
+    )
+
+    # catchment_id -> spec
+    by_cid: Dict[str, Dict[str, Any]] = {str(s["catchment_id"]): s for s in binding_specs if "catchment_id" in s}
+
+    # 补齐所有 catchment 的绑定 spec（用于“仅靠 catchment_forecast_rules”配置）
+    for cid in scheme.catchments.keys():
+        scid = str(cid)
+        by_cid.setdefault(scid, {"catchment_id": scid, "variables": []})
+
+    # 添加 precipitation / temperature 的变量（若缺失）
+    kind_keys = list(forecast_rules.keys())
+    for rule_key in kind_keys:
+        kind = _forecast_rules_key_to_forcing_kind(rule_key)
+        for cid, kind_to_virtual in fusion_plan["virtual_station_id_by_catchment_kind"].items():
+            virtual_id = kind_to_virtual.get(kind.value, "")
+            if not virtual_id:
+                continue
+
+            spec = by_cid.get(str(cid))
+            if spec is None:
+                continue
+
+            # variables 格式
+            if "variables" in spec and isinstance(spec["variables"], list):
+                exists = any(str(v.get("kind") or "").strip() == kind.value for v in spec["variables"])
+                if not exists:
+                    spec["variables"].append(
+                        {"kind": kind.value, "stations": [{"id": virtual_id, "weight": 1.0}]}
+                    )
+                continue
+
+            # legacy bindings 格式
+            bindings = spec.get("bindings")
+            if isinstance(bindings, list):
+                exists = any(str(b.get("forcing_kind") or "").strip() == kind.value for b in bindings)
+                if not exists:
+                    bindings.append({"forcing_kind": kind.value, "station_id": virtual_id})
+                continue
+
+            # 兜底：如果 spec 既没有 variables 也没有 bindings，则强制切换到 variables
+            spec["variables"] = [{"kind": kind.value, "stations": [{"id": virtual_id, "weight": 1.0}]}]
+            spec.pop("bindings", None)
+
+    # 返回按 catchment_id 稳定排序后的 list
+    out = [by_cid[str(cid)] for cid in sorted(by_cid.keys())]
+    return out, fusion_plan
 
 
 def _find_scheme(
@@ -175,20 +333,24 @@ def _make_timedelta_from_type_step(time_type: TimeType, step_size: int) -> timed
 
 def _require_scheme_keys(scheme_data: Dict[str, Any]) -> None:
     """多尺度配置下，每个 scheme 自包含拓扑与参数；缺少键则提前报错。"""
-    required = (
+    required_always = (
         "time_axis",
         "nodes",
         "reaches",
         "catchments",
-        "catchment_forcing_bindings",
         "stations",
     )
-    for key in required:
+    for key in required_always:
         if key not in scheme_data:
             raise ValueError(
                 f"Each entry in `schemes` must include `{key}` "
-                f"(use [] for empty catchments/stations/bindings if applicable)."
+                f"(use [] for empty catchments/stations if applicable)."
             )
+    if "catchment_forcing_bindings" not in scheme_data and "catchment_forecast_rules" not in scheme_data:
+        raise ValueError(
+            "Each entry in `schemes` must include either `catchment_forcing_bindings` "
+            "or `catchment_forecast_rules`."
+        )
     raw_st = scheme_data.get("stations")
     if raw_st is not None and not isinstance(raw_st, (list, dict)):
         raise ValueError(
@@ -416,6 +578,18 @@ def load_scheme_from_json(
         scheme.add_catchment(catchment)
 
     binding_specs = _normalize_catchment_forcing_bindings(config_src)
+
+    # --- catchment_forecast_rules：把多源面预报规则转成 binding_specs（虚拟 station_id）
+    forecast_rules = config_src.get("catchment_forecast_rules") or {}
+    if forecast_rules:
+        binding_specs, fusion_plan = _apply_catchment_forecast_rules_to_binding_specs(
+            scheme=scheme,
+            binding_specs=binding_specs,
+            forecast_rules=forecast_rules,
+        )
+        scheme.catchment_forecast_rules = dict(forecast_rules)
+        scheme.catchment_forecast_fusion_plan = dict(fusion_plan)
+
     spec_catchment_ids = {str(s["catchment_id"]) for s in binding_specs}
     for cid in scheme.catchments.keys():
         if cid not in spec_catchment_ids:

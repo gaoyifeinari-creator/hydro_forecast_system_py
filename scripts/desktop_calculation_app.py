@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from hydro_engine.io.calculation_app_data_builder import (
+    apply_catchment_forecast_fusion_to_station_packages,
     build_catchment_observed_flow_series,
     build_catchment_precip_series,
     build_node_observed_flow_series,
@@ -181,8 +182,12 @@ def run_calculation_pipeline(
     t0 = times[0].to_pydatetime()
     t1 = times[-1].to_pydatetime()
 
-    rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
+    base_rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
     flow_senids = sorted(list(collect_observed_flow_station_ids(scheme)))
+    fusion_plan = getattr(scheme, "catchment_forecast_fusion_plan", None) or {}
+    raw_senids = set(fusion_plan.get("raw_senids") or [])
+    # 原始 source_id（多源面产品）需要一并读取，之后才可对虚拟 station_id 做逐时兜底融合
+    rain_senids = sorted(set(base_rain_senids) | raw_senids)
 
     rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
         jdbc_config_path=jdbc_config_path,
@@ -201,6 +206,15 @@ def run_calculation_pipeline(
         time_context.warmup_start_time,
         time_context.time_delta,
     )
+    if fusion_plan:
+        station_packages = apply_catchment_forecast_fusion_to_station_packages(
+            station_packages=station_packages,
+            fusion_plan=fusion_plan,
+            rain_df=rain_df,
+            times=times,
+            start_time=time_context.warmup_start_time,
+            time_step=time_context.time_delta,
+        )
     warn_a = jdbc_warns + warn_a
     # 实时预报模式：起报时刻之后不使用实测气象（未来应由外部预报驱动）。
     forecast_start_idx = times.get_indexer([pd.Timestamp(time_context.forecast_start_time)])[0]

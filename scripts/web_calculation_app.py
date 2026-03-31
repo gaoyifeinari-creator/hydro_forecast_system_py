@@ -9,7 +9,11 @@ import streamlit as st
 from pathlib import Path
 
 from calculation_app_common import write_temp_config_with_periods
-from hydro_engine.io.calculation_app_data_builder import build_observed_flows, build_station_packages
+from hydro_engine.io.calculation_app_data_builder import (
+    apply_catchment_forecast_fusion_to_station_packages,
+    build_observed_flows,
+    build_station_packages,
+)
 from hydro_engine.io.calculation_app_data_loader import (
     DEFAULT_FLOOD_JDBC_CONFIG,
     build_times,
@@ -91,8 +95,11 @@ def main() -> None:
 
         t0 = times[0].to_pydatetime()
         t1 = times[-1].to_pydatetime()
-        rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
+        base_rain_senids = sorted(list(collect_rain_station_ids(binding_specs)))
         flow_senids = sorted(list(collect_observed_flow_station_ids(scheme)))
+        fusion_plan = getattr(scheme, "catchment_forecast_fusion_plan", None) or {}
+        raw_senids = set(fusion_plan.get("raw_senids") or [])
+        rain_senids = sorted(set(base_rain_senids) | raw_senids)
 
         rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
             jdbc_config_path=jdbc_path.strip(),
@@ -111,6 +118,15 @@ def main() -> None:
             time_context.warmup_start_time,
             time_context.time_delta,
         )
+        if fusion_plan:
+            station_packages = apply_catchment_forecast_fusion_to_station_packages(
+                station_packages=station_packages,
+                fusion_plan=fusion_plan,
+                rain_df=rain_df,
+                times=times,
+                start_time=time_context.warmup_start_time,
+                time_step=time_context.time_delta,
+            )
         warn_a = jdbc_warns + warn_a
         observed_flows, warn_b = build_observed_flows(
             scheme,

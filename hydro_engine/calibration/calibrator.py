@@ -34,6 +34,7 @@ from hydro_engine.core.timeseries import TimeSeries
 from hydro_engine.io.json_config import load_scheme_from_json, run_calculation_from_json
 
 from hydro_engine.io.calculation_app_data_builder import (
+    apply_catchment_forecast_fusion_to_station_packages,
     build_catchment_observed_flow_series,
     build_catchment_precip_series,
     build_node_observed_flow_series,
@@ -460,6 +461,16 @@ class HydroModelCalibrator:
             self.binding_specs, self._rain_df, self.full_times,
             self.total_start, self.step_delta,
         )
+        fusion_plan = getattr(self.scheme, "catchment_forecast_fusion_plan", None) or {}
+        if fusion_plan:
+            self.station_packages = apply_catchment_forecast_fusion_to_station_packages(
+                station_packages=self.station_packages,
+                fusion_plan=fusion_plan,
+                rain_df=self._rain_df,
+                times=self.full_times,
+                start_time=self.total_start,
+                time_step=self.step_delta,
+            )
         self.observed_flows, _ = build_observed_flows(
             self.scheme, self._flow_df, self.full_times,
             self.total_start, self.step_delta,
