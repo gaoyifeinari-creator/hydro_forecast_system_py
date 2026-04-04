@@ -448,6 +448,7 @@ class HydroModelCalibrator:
             flow_csv=str(self.flow_csv),
             time_start=self.total_start,
             time_end=self.total_end,
+            time_type=self.time_type,
         )
 
         self.scheme, self.binding_specs, _ = load_scheme_from_json(

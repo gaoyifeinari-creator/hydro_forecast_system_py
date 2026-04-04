@@ -91,7 +91,7 @@ hydro_project/
 
 - Python 3.8+
 - `networkx`
-- For desktop UI: `matplotlib`, `pandas`, `tkinter` (usually built-in on Windows Python)
+- Web UI: `streamlit`, `matplotlib`, `pandas`
 
 Install minimal dependencies:
 
@@ -101,16 +101,16 @@ pip install networkx pandas matplotlib numpy
 
 (`numpy` is required for calibration and evaluation scripts.)
 
-### 2) Run Desktop App
+### 2) Run Web App (Streamlit)
 
 ```bash
-python scripts/desktop_calculation_app.py
+python scripts/web_calculation_app.py
 ```
 
 or on Windows:
 
 ```bat
-start_desktop_app.bat
+start_web_calculation_app.bat
 ```
 
 ### 3) Run Tests

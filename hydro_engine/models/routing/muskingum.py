@@ -11,7 +11,19 @@ from hydro_engine.core.timeseries import TimeSeries
 
 @dataclass(frozen=True)
 class MuskingumRoutingModel(IHydrologicalModel):
-    """马斯京根（Muskingum）河道演进模型。"""
+    """
+    马斯京根（Muskingum）河道演进模型（与 Java ``HFMSKAlg`` 对齐）。
+
+    **时段与输出网格**：返回的 :class:`~hydro_engine.core.timeseries.TimeSeries` 与入流**共用**
+    ``start_time``、``time_step``、``len(values)``，**不对时间戳做平移或插值挪位**；
+    ``outflow[i]`` 与 ``inflow[i]`` 对应同一离散时刻 ``start_time + i·Δt``。
+
+    **递推**：``i≥1`` 时用 ``inflow[i-1]``、``inflow[i]`` 与上一时刻状态算 ``outflow[i]``（离散马斯京根），
+    物理上有滞蓄，但**索引 i 与时段对齐**，不会产生「整列相对入流错位一步」的实现错误。
+
+    **Δt**：由 ``input_series.time_step`` 换算为小时参与系数 ``c0,c1,c2``；日方案（每步 1 日）下为 24h。
+    **K**：``k_hours`` 始终按**小时**解释，与 ``Δt`` 一致即可。
+    """
 
     k_hours: float
     x: float = 0.2
@@ -94,6 +106,7 @@ class MuskingumRoutingModel(IHydrologicalModel):
             outflow[i] = qo2
 
         # Java 不做 clamp；这里保持与 Java 一致（若输入含负值，输出也可能为负）
+        # 显式复用入流时间轴：与 HFMSKAlg 一致，输出与入流逐索引同一时刻。
         return TimeSeries(input_series.start_time, input_series.time_step, outflow)
 
     def _validate_parameters(self) -> None:

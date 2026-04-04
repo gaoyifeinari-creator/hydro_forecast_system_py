@@ -49,7 +49,8 @@ class ForecastTimeContext:
     时间步由 ``time_type`` + ``step_size`` 原生确定（``time_delta``），不做单位换算。
     例如：日方案下每个步长代表一个完整的日尺度；3 小时方案下每步代表 3 小时。
 
-    时间轴也可由 ``from_period_counts`` 用四段**连续步数**无歧义构造：预热 → 校正 → 历史显示 → 预报。
+    时间轴也可由 ``from_period_counts`` 用四段步数构造（见该方法文档）：预热总长度 W 自 T0 向历史回溯，
+    校正段 C、历史展示段 H 为 T0 前尾段（嵌套于 W 内），预报段 F 自 T0 起向未来。
     """
 
     warmup_start_time: datetime
@@ -74,14 +75,14 @@ class ForecastTimeContext:
         td = self.time_delta
         if td.total_seconds() <= 0:
             raise ValueError("time_delta must be positive")
-        if self.warmup_start_time > self.correction_start_time:
-            raise ValueError("warmup_start_time must be <= correction_start_time")
-        if self.correction_start_time > self.forecast_start_time:
-            raise ValueError("correction_start_time must be <= forecast_start_time")
         if self.forecast_start_time >= self.end_time:
             raise ValueError("forecast_start_time must be < end_time")
         if self.warmup_start_time > self.display_start_time:
             raise ValueError("warmup_start_time must be <= display_start_time")
+        if self.display_start_time > self.correction_start_time:
+            raise ValueError("display_start_time must be <= correction_start_time")
+        if self.correction_start_time > self.forecast_start_time:
+            raise ValueError("correction_start_time must be <= forecast_start_time")
         if self.display_start_time > self.end_time:
             raise ValueError("display_start_time must be <= end_time")
 
@@ -130,14 +131,22 @@ class ForecastTimeContext:
         forecast_period_steps: int,
     ) -> ForecastTimeContext:
         """
-        由四段连续步数构造时间轴（无索引歧义）：
+        以「预报起点 T0」为锚，向历史回溯嵌套构造时间轴（四段步数语义）：
 
-        - **预热** ``warmup_period_steps``：从 ``warmup_start_time`` 起；
-        - **校正** ``correction_period_steps``：紧接预热，用于残差统计等；
-        - **历史显示** ``historical_display_period_steps``：紧接校正，仍为 T0 前历史，且为展示层「历史段」；
-        - **预报** ``forecast_period_steps``：紧接历史显示，即 T0 起算的未来段（须 ≥ 1）。
+        - **预热** ``warmup_period_steps`` (W)：**总**预热步数（自 T0 向历史的完整回溯长度，非分段相加）。
+          数据/模拟自 ``warmup_start_time = T0 − W·Δt`` 起至 ``end_time`` 止。
+        - **历史显示** ``historical_display_period_steps`` (H)：T0 前最近 H 步，时间窗
+          ``[T0−H·Δt, T0)``；须 **H ≤ W**。
+        - **校正** ``correction_period_steps`` (C)：T0 前最近 C 步用实测等做校正（如 AR1），
+          时间窗 ``[T0−C·Δt, T0)``；须 **C ≤ H ≤ W**。
+        - **预报** ``forecast_period_steps`` (F)：自 T0 起向未来 F 步（须 ≥ 1）。
 
-        推导：``correction_start`` = 预热末；``display_start`` = 预热+校正末；``forecast_start`` (T0) = 预热+校正+历史显示末；``end_time`` = 四段总长末。
+        推导（记 ``warmup_start`` 为 ``ws``）：
+        ``forecast_start`` (T0) = ``ws + W·Δt``；
+        ``display_start`` = ``T0 − H·Δt``；
+        ``correction_start`` = ``T0 − C·Δt``；
+        ``end_time`` = ``T0 + F·Δt``。
+        总步数 = **W + F**（T0 前 W 步，T0 起 F 步）。
         """
         td = _make_time_delta(time_type, step_size)
         w, c, h, f = (
@@ -150,11 +159,25 @@ class ForecastTimeContext:
             raise ValueError("period step counts must be non-negative")
         if f < 1:
             raise ValueError("forecast_period_steps must be >= 1")
+        if w == 0 and max(h, c) > 0:
+            raise ValueError(
+                "warmup_period_steps must be > 0 when historical_display_period_steps "
+                "or correction_period_steps is > 0"
+            )
+        if h > w or c > w:
+            raise ValueError(
+                "historical_display_period_steps and correction_period_steps must not exceed warmup_period_steps"
+            )
+        if c > h:
+            raise ValueError(
+                "correction_period_steps must be <= historical_display_period_steps "
+                "(tail correction window within historical display tail)"
+            )
 
-        correction_start = warmup_start_time + td * w
-        display_start = warmup_start_time + td * (w + c)
-        forecast_start = warmup_start_time + td * (w + c + h)
-        end_time = warmup_start_time + td * (w + c + h + f)
+        forecast_start = warmup_start_time + td * w
+        display_start = forecast_start - td * h
+        correction_start = forecast_start - td * c
+        end_time = forecast_start + td * f
 
         return cls.from_absolute_times(
             warmup_start_time=warmup_start_time,

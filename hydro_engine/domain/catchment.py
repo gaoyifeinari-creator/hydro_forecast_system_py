@@ -20,6 +20,7 @@ class SubCatchment:
         return self.runoff_model.run(forcing)
 
     def route_runoff(self, runoff: TimeSeries) -> TimeSeries:
+        """产流序列经子流域汇流模型；输出与入流同一时间网格（如马斯京根不移动时间戳）。"""
         if self.routing_model is None:
             return runoff
         routing_input = ForcingData.single(ForcingKind.ROUTING_INFLOW, runoff)

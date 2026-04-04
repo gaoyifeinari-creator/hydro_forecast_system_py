@@ -27,6 +27,8 @@ DEFAULT_FLOOD_JDBC_CONFIG = PROJECT_ROOT / "configs" / "floodForecastJdbc.json"
 
 _DEFAULT_STATION_HOURLY_SQL_KEY = "hourdb_hourly_range"
 _DEFAULT_STATION_HOURLY_LABEL = "hourdb"
+_DEFAULT_STATION_DAILY_SQL_KEY = "daydb_daily_range"
+_DEFAULT_STATION_DAILY_LABEL = "daydb"
 
 
 def read_config(path: str) -> Dict[str, Any]:
@@ -143,6 +145,30 @@ def _merge_database_service_spec(spec: Dict[str, Any], ref_path: Path) -> Dict[s
     return out
 
 
+def read_jdbc_daydb_normalize_time_to_midnight_from_path(path: str) -> bool:
+    """读取 ``floodForecastJdbc.json`` 路径，返回 ``daydb.normalize_time_to_midnight``（缺省 False）。"""
+    p = Path(str(path).strip())
+    if not p.is_file():
+        return False
+    return _jdbc_daydb_normalize_time_to_midnight(read_config(str(p)))
+
+
+def _jdbc_daydb_normalize_time_to_midnight(raw: Dict[str, Any]) -> bool:
+    """
+    从 ``floodForecastJdbc.json``（或同类 JSON）读取：日表读数后是否将时刻归一到当日 0 点。
+
+    支持两种写法（任选其一）：
+    - ``"daydb": { "normalize_time_to_midnight": true }``（推荐，字段集中、易读）
+    - ``"daydb_normalize_time_to_midnight": true``（扁平兼容）
+    """
+    if isinstance(raw.get("daydb"), dict):
+        return bool(raw["daydb"].get("normalize_time_to_midnight", False))
+    v = raw.get("daydb_normalize_time_to_midnight")
+    if v is not None:
+        return bool(v)
+    return False
+
+
 def _coerce_hourdb_column_names(df: pd.DataFrame) -> pd.DataFrame:
     """库表返回列名大小写不一致时，统一为 SENID / TIME / V / AVGV。"""
     out = df.copy()
@@ -161,6 +187,8 @@ def load_station_hourly_frame(
     time_end: Optional[datetime] = None,
     senids: Optional[List[str]] = None,
     senid_chunk_size: int = 1000,
+    db_sql_key: Optional[str] = None,
+    db_label: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     读取测站小时数据：CSV 文件，或 JSON 数据库配置（见 ``configs/station_hourly_database.example.json``）。
@@ -168,6 +196,8 @@ def load_station_hourly_frame(
     对数据库后端：支持传入 `senids`，将 SQL 切到 `*_range_in`（以 `SENID IN :senids` 降低全表扫描）。
     """
     ref = str(ref).strip()
+    preferred_sql_key = str(db_sql_key or _DEFAULT_STATION_HOURLY_SQL_KEY)
+    preferred_label = str(db_label or _DEFAULT_STATION_HOURLY_LABEL)
     p = Path(ref)
     if p.suffix.lower() == ".json" and p.is_file():
         raw = json.loads(p.read_text(encoding="utf-8"))
@@ -183,8 +213,8 @@ def load_station_hourly_frame(
                     "type": "database",
                     "_embedded_services": raw["services"],
                     "service": str(sh.get("service") or "").strip(),
-                    "label": str(sh.get("label", _DEFAULT_STATION_HOURLY_LABEL)),
-                    "sql_key": str(sh.get("sql_key", _DEFAULT_STATION_HOURLY_SQL_KEY)),
+                    "label": str(sh.get("label", preferred_label)),
+                    "sql_key": str(sh.get("sql_key", preferred_sql_key)),
                     "params": dict(sh.get("params") or {}),
                 }
                 if not spec["service"]:
@@ -207,8 +237,8 @@ def load_station_hourly_frame(
                     "type": "database",
                     "_embedded_services": raw["services"],
                     "service": svc_name,
-                    "label": _DEFAULT_STATION_HOURLY_LABEL,
-                    "sql_key": _DEFAULT_STATION_HOURLY_SQL_KEY,
+                    "label": preferred_label,
+                    "sql_key": preferred_sql_key,
                     "params": {},
                 }
                 if raw.get("pool_max") is not None:
@@ -232,10 +262,13 @@ def load_station_hourly_frame(
         params["t_start"] = time_start.strftime("%Y-%m-%d %H:%M:%S")
         params["t_end"] = time_end.strftime("%Y-%m-%d %H:%M:%S")
 
-        base_sql_key = spec.get("sql_key", _DEFAULT_STATION_HOURLY_SQL_KEY)
+        base_sql_key = spec.get("sql_key", preferred_sql_key)
         pool_max_int = int(spec.get("pool_max", 5))
         pool_min_int = int(spec.get("pool_min", spec.get("pool_max", 5)))
         max_overflow_int = int(spec.get("max_overflow", max(0, pool_max_int - pool_min_int)))
+
+        is_daydb_sql = str(base_sql_key).strip().lower().startswith("daydb")
+        day_midnight = _jdbc_daydb_normalize_time_to_midnight(raw) if is_daydb_sql else False
 
         if senids is not None:
             unique = sorted({str(s).strip() for s in senids if str(s).strip()})
@@ -269,11 +302,14 @@ def load_station_hourly_frame(
                 "normalize": True,
             }
 
+        if is_daydb_sql:
+            opts["normalize_daily_times_to_midnight"] = day_midnight
+
         if spec.get("sql_yaml_path"):
             opts["sql_yaml_path"] = str(spec["sql_yaml_path"])
 
         df = read_station_data(
-            source=str(spec.get("label", _DEFAULT_STATION_HOURLY_LABEL)),
+            source=str(spec.get("label", preferred_label)),
             source_type="database",
             options=opts,
         )
@@ -281,6 +317,18 @@ def load_station_hourly_frame(
 
     # CSV
     return read_station_data(ref, source_type="file")
+
+
+def _resolve_db_source_for_time_type(time_type: str) -> Tuple[str, str]:
+    """
+    根据计算时间尺度选择数据库读取配置。
+    - Day -> DAYDB
+    - Hour/Minute/其他 -> HOURDB（保持现有行为）
+    """
+    t = str(time_type or "").strip().lower()
+    if t == "day":
+        return _DEFAULT_STATION_DAILY_SQL_KEY, _DEFAULT_STATION_DAILY_LABEL
+    return _DEFAULT_STATION_HOURLY_SQL_KEY, _DEFAULT_STATION_HOURLY_LABEL
 
 
 def load_rain_flow_for_calculation(
@@ -293,11 +341,15 @@ def load_rain_flow_for_calculation(
     rain_senids: Optional[List[str]] = None,
     flow_senids: Optional[List[str]] = None,
     senid_chunk_size: int = 1000,
+    time_type: str = "Hour",
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
-    优先使用 `floodForecastJdbc.json` 连库读取 HOURDB（雨量 V + 流量 AVGV 同表）。
+    优先使用 `floodForecastJdbc.json` 连库读取数据库时序表（雨量 V + 流量 AVGV 同表）。
+    - Day 方案：读取 DAYDB（daydb_daily_range[_in]）
+    - 其余方案：读取 HOURDB（hourdb_hourly_range[_in]）
     """
     warns: List[str] = []
+    sql_key, label = _resolve_db_source_for_time_type(time_type)
     jc = str(jdbc_config_path).strip()
     if jc and Path(jc).is_file():
         union: Optional[List[str]] = None
@@ -315,6 +367,8 @@ def load_rain_flow_for_calculation(
             time_end=time_end,
             senids=union,
             senid_chunk_size=senid_chunk_size,
+            db_sql_key=sql_key,
+            db_label=label,
         )
         return shared, shared, warns
 
@@ -330,6 +384,8 @@ def load_rain_flow_for_calculation(
             time_end=time_end,
             senids=rain_senids or flow_senids,
             senid_chunk_size=senid_chunk_size,
+            db_sql_key=sql_key,
+            db_label=label,
         )
         return shared, shared, warns
 
@@ -342,6 +398,8 @@ def load_rain_flow_for_calculation(
         time_end=time_end,
         senids=rain_senids,
         senid_chunk_size=senid_chunk_size,
+        db_sql_key=sql_key if Path(rp).suffix.lower() == ".json" else None,
+        db_label=label if Path(rp).suffix.lower() == ".json" else None,
     )
     flow_df = load_station_hourly_frame(
         fp,
@@ -349,6 +407,8 @@ def load_rain_flow_for_calculation(
         time_end=time_end,
         senids=flow_senids,
         senid_chunk_size=senid_chunk_size,
+        db_sql_key=sql_key if Path(fp).suffix.lower() == ".json" else None,
+        db_label=label if Path(fp).suffix.lower() == ".json" else None,
     )
     return rain_df, flow_df, warns
 

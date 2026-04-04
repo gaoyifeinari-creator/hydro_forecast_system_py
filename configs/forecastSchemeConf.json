@@ -1,125 +1,159 @@
 {
   "metadata": {
     "name": "converted_legacy_project",
-    "description": "Converted from legacy secid/downSecId config by convert_legacy_config.py"
+    "description": "Converted from legacy secid/downSecId config by convert_legacy_config.py Multi-scale: RSHour→Hour scheme, RSDay→Day scheme."
   },
   "schemes": [
     {
       "time_type": "Hour",
       "step_size": 1,
       "time_axis": {
-        "warmup_period_steps": 720,
-        "correction_period_steps": 48,
-        "historical_display_period_steps": 72,
-        "forecast_period_steps": 48
+        "warmup_period_steps": 120,
+        "correction_period_steps": 0,
+        "historical_display_period_steps": 120,
+        "forecast_period_steps": 264
       },
       "nodes": [
         {
-          "id": "1041",
-          "name": "佛子岭",
-          "type": "reservoir",
+          "id": "154197",
+          "name": "立洲",
+          "type": "cross_section",
           "incoming_reach_ids": [
-            "R_1043_TO_1041",
-            "R_1039_TO_1041"
+            "R_154195_TO_154197"
           ],
           "outgoing_reach_ids": [],
           "local_catchment_ids": [
-            "4101"
+            "154197",
+            "154849",
+            "154879"
           ],
           "station_binding": {
-            "inflow_station_id": "3110104104",
-            "outflow_station_id": "3110104110",
-            "stage_station_id": "3110104183"
+            "flow_station_id": "1541971005",
+            "stage_station_id": "1541970001"
           },
-          "use_observed_for_routing": false,
-          "params": {
-            "dispatch_model_alg_type": "InOutflowBalance",
-            "inflow_attenuation": 1.0
-          }
+          "use_observed_for_routing": false
         },
         {
-          "id": "1043",
-          "name": "磨子潭",
-          "type": "reservoir",
-          "incoming_reach_ids": [],
+          "id": "154195",
+          "name": "俄公堡",
+          "type": "cross_section",
+          "incoming_reach_ids": [
+            "R_154034_TO_154195"
+          ],
           "outgoing_reach_ids": [
-            "R_1043_TO_1041"
+            "R_154195_TO_154197"
           ],
           "local_catchment_ids": [
-            "4301",
-            "4302"
+            "154191",
+            "1541951",
+            "1541952"
           ],
           "station_binding": {
-            "inflow_station_id": "3110104304",
-            "outflow_station_id": "3110104310",
-            "stage_station_id": "3110104383"
+            "flow_station_id": "1541951005",
+            "stage_station_id": "-99"
           },
-          "use_observed_for_routing": true,
-          "params": {
-            "dispatch_model_alg_type": "InOutflowBalance",
-            "inflow_attenuation": 1.0
-          }
+          "use_observed_for_routing": true
         },
         {
-          "id": "1039",
-          "name": "白莲崖",
-          "type": "reservoir",
-          "incoming_reach_ids": [],
+          "id": "154034",
+          "name": "卡基娃",
+          "type": "cross_section",
+          "incoming_reach_ids": [
+            "R_154850_TO_154034"
+          ],
           "outgoing_reach_ids": [
-            "R_1039_TO_1041"
+            "R_154034_TO_154195"
           ],
           "local_catchment_ids": [
-            "3901",
-            "3902",
-            "3903"
+            "154034",
+            "154846",
+            "154847"
           ],
           "station_binding": {
-            "inflow_station_id": "3110103904",
-            "outflow_station_id": "3110103910",
-            "stage_station_id": "3110103983"
+            "flow_station_id": "1540341000",
+            "stage_station_id": "-99"
           },
-          "use_observed_for_routing": true,
-          "params": {
-            "dispatch_model_alg_type": "InOutflowBalance",
-            "inflow_attenuation": 1.0
-          }
+          "use_observed_for_routing": true
+        },
+        {
+          "id": "154850",
+          "name": "上通坝",
+          "type": "cross_section",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": [
+            "R_154850_TO_154034"
+          ],
+          "local_catchment_ids": [
+            "1548551",
+            "15485510",
+            "15485511",
+            "15485513",
+            "1548552",
+            "1548553",
+            "1548554",
+            "1548555",
+            "1548556",
+            "1548557",
+            "1548558",
+            "1548559"
+          ],
+          "station_binding": {
+            "flow_station_id": "1548501000",
+            "stage_station_id": "-99"
+          },
+          "use_observed_for_routing": true
         }
       ],
       "reaches": [
         {
-          "id": "R_1043_TO_1041",
-          "upstream_node_id": "1043",
-          "downstream_node_id": "1041",
+          "id": "R_154195_TO_154197",
+          "upstream_node_id": "154195",
+          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 0.0,
-              "x": 0.1,
-              "n_segments": 0
+              "k_hours": 1.0,
+              "x": 0.05,
+              "n_segments": 1
             }
           }
         },
         {
-          "id": "R_1039_TO_1041",
-          "upstream_node_id": "1039",
-          "downstream_node_id": "1041",
+          "id": "R_154034_TO_154195",
+          "upstream_node_id": "154034",
+          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 0.0,
-              "x": 0.1,
-              "n_segments": 0
+              "k_hours": 0.7,
+              "x": 0.05,
+              "n_segments": 1
+            }
+          }
+        },
+        {
+          "id": "R_154850_TO_154034",
+          "upstream_node_id": "154850",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.7,
+              "x": 0.05,
+              "n_segments": 1
             }
           }
         }
       ],
       "catchments": [
         {
-          "id": "4101",
+          "id": "154197",
+          "name": "立洲单元",
+          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 0.7,
+              "k_hours": 2.0,
               "x": 0.01,
               "n_segments": 1
             }
@@ -130,39 +164,41 @@
               "lag": 1,
               "wum": 20.0,
               "wlm": 70.0,
-              "wdm": 60.0,
-              "k": 0.56,
-              "c": 0.15,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
               "b": 0.3,
               "imp": 0.02,
-              "sm": 35.0,
-              "ex": 1.5,
+              "sm": 30.0,
+              "ex": 1.2,
               "kss": 0.4,
               "kg": 0.3,
-              "kkss": 0.95,
-              "kkg": 0.95,
-              "cs": 0.76,
-              "area": 525.0
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 492.0
             },
             "state": {
-              "wu": 5.3,
+              "wu": 5.0,
               "wl": 70.0,
-              "wd": 60.0,
+              "wd": 40.0,
               "fr": 0.01,
-              "s": 1.9,
-              "qrss0": 2.0,
-              "qrg0": 2.0,
-              "qs0": 1.0
+              "s": 6.0,
+              "qrss0": 4.0,
+              "qrg0": 7.0,
+              "qs0": 5.0
             }
           }
         },
         {
-          "id": "4301",
+          "id": "154879",
+          "name": "康坞单元",
+          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 1.0,
-              "x": 0.1,
+              "k_hours": 2.0,
+              "x": 0.01,
               "n_segments": 1
             }
           },
@@ -172,82 +208,217 @@
               "lag": 1,
               "wum": 20.0,
               "wlm": 70.0,
-              "wdm": 60.0,
-              "k": 0.65,
-              "c": 0.15,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
               "b": 0.3,
               "imp": 0.02,
-              "sm": 25.0,
-              "ex": 1.5,
-              "kss": 0.2,
-              "kg": 0.1,
-              "kkss": 0.7,
-              "kkg": 0.9,
-              "cs": 0.7,
-              "area": 165.2
-            },
-            "state": {
-              "wu": 5.3,
-              "wl": 70.0,
-              "wd": 60.0,
-              "fr": 0.01,
-              "s": 1.9,
-              "qrss0": 2.0,
-              "qrg0": 2.0,
-              "qs0": 1.0
-            }
-          }
-        },
-        {
-          "id": "4302",
-          "routing_model": {
-            "name": "MuskingumRoutingModel",
-            "params": {
-              "k_hours": 1.0,
-              "x": 0.1,
-              "n_segments": 1
-            }
-          },
-          "runoff_model": {
-            "name": "XinanjiangCSRunoffModel",
-            "params": {
-              "lag": 1,
-              "wum": 20.0,
-              "wlm": 70.0,
-              "wdm": 60.0,
-              "k": 0.75,
-              "c": 0.15,
-              "b": 0.3,
-              "imp": 0.02,
-              "sm": 40.0,
-              "ex": 1.5,
-              "kss": 0.3,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
               "kg": 0.3,
-              "kkss": 0.5,
-              "kkg": 0.9,
-              "cs": 0.75,
-              "area": 404.8,
-              "debug_trace": true
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 415.0
             },
             "state": {
-              "wu": 5.3,
+              "wu": 5.0,
               "wl": 70.0,
-              "wd": 60.0,
+              "wd": 40.0,
               "fr": 0.01,
-              "s": 1.9,
-              "qrss0": 2.0,
-              "qrg0": 2.0,
+              "s": 6.0,
+              "qrss0": 4.0,
+              "qrg0": 7.0,
+              "qs0": 5.0
+            }
+          }
+        },
+        {
+          "id": "154849",
+          "name": "纳瓦单元",
+          "downstream_node_id": "154197",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 146.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 4.0,
+              "qrg0": 7.0,
+              "qs0": 5.0
+            }
+          }
+        },
+        {
+          "id": "1541951",
+          "name": "俄公堡单元",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.7,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.8,
+              "area": 315.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 7.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1541952",
+          "name": "俄公堡单元",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.7,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.8,
+              "area": 420.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 7.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "154191",
+          "name": "茶布朗单元",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 217.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
               "qs0": 1.0
             }
           }
         },
         {
-          "id": "3901",
+          "id": "154034",
+          "name": "卡基娃单元",
+          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 1.0,
-              "x": 0.1,
+              "k_hours": 1.4,
+              "x": 0.01,
               "n_segments": 1
             }
           },
@@ -257,113 +428,645 @@
               "lag": 1,
               "wum": 20.0,
               "wlm": 70.0,
-              "wdm": 60.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 361.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "154847",
+          "name": "清水沟单元",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 172.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "154846",
+          "name": "陈昌单元",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.95,
+              "area": 221.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "1548551",
+          "name": "上通坝单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
               "k": 0.6,
-              "c": 0.15,
+              "c": 0.1,
               "b": 0.3,
               "imp": 0.02,
-              "sm": 50.0,
-              "ex": 1.5,
-              "kss": 0.3,
-              "kg": 0.1,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
               "kkss": 0.9,
-              "kkg": 0.97,
-              "cs": 0.9,
-              "area": 105.0
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 340.0
             },
             "state": {
-              "wu": 5.3,
+              "wu": 5.0,
               "wl": 70.0,
-              "wd": 60.0,
+              "wd": 40.0,
               "fr": 0.01,
               "s": 6.0,
-              "qrss0": 0.0,
-              "qrg0": 3.0,
-              "qs0": 0.0
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
             }
           }
         },
         {
-          "id": "3902",
+          "id": "15485513",
+          "name": "上通坝13单元",
+          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 0.7,
-              "x": 0.1,
-              "n_segments": 1
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
             }
           },
           "runoff_model": {
             "name": "XinanjiangCSRunoffModel",
             "params": {
-              "lag": 1,
+              "lag": 2,
               "wum": 20.0,
               "wlm": 70.0,
-              "wdm": 60.0,
-              "k": 0.75,
-              "c": 0.15,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
               "b": 0.3,
               "imp": 0.02,
-              "sm": 36.0,
-              "ex": 1.5,
-              "kss": 0.3,
-              "kg": 0.1,
-              "kkss": 0.7,
-              "kkg": 0.97,
-              "cs": 0.9,
-              "area": 296.24
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 353.0
             },
             "state": {
-              "wu": 5.3,
+              "wu": 5.0,
               "wl": 70.0,
-              "wd": 60.0,
+              "wd": 40.0,
               "fr": 0.01,
               "s": 6.0,
-              "qrss0": 0.0,
-              "qrg0": 3.0,
-              "qs0": 0.0
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
             }
           }
         },
         {
-          "id": "3903",
+          "id": "1548552",
+          "name": "上通坝2单元",
+          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
-              "k_hours": 0.7,
-              "x": 0.1,
-              "n_segments": 1
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
             }
           },
           "runoff_model": {
             "name": "XinanjiangCSRunoffModel",
             "params": {
-              "lag": 1,
+              "lag": 2,
               "wum": 20.0,
               "wlm": 70.0,
-              "wdm": 60.0,
-              "k": 0.75,
-              "c": 0.15,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
               "b": 0.3,
               "imp": 0.02,
-              "sm": 36.0,
-              "ex": 1.5,
-              "kss": 0.3,
-              "kg": 0.1,
-              "kkss": 0.7,
-              "kkg": 0.97,
-              "cs": 0.7,
-              "area": 343.76
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 441.0
             },
             "state": {
-              "wu": 5.3,
+              "wu": 5.0,
               "wl": 70.0,
-              "wd": 60.0,
+              "wd": 40.0,
               "fr": 0.01,
               "s": 6.0,
-              "qrss0": 0.0,
-              "qrg0": 3.0,
-              "qs0": 0.0
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548553",
+          "name": "上通坝3单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 476.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548554",
+          "name": "上通坝4单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 523.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548555",
+          "name": "上通坝5单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 467.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548556",
+          "name": "上通坝6单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 601.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548557",
+          "name": "上通坝7单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 627.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548558",
+          "name": "上通坝8单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 312.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548559",
+          "name": "上通坝9单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 838.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "15485510",
+          "name": "上通坝10单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 408.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "15485511",
+          "name": "上通坝11单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 3.0,
+              "x": 0.01,
+              "n_segments": 2
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 2,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.6,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.9,
+              "kkg": 0.98,
+              "cs": 0.95,
+              "area": 428.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 2.0,
+              "qrg0": 4.0,
+              "qs0": 4.0
             }
           }
         }
@@ -371,188 +1074,251 @@
       "stations": {
         "rain_gauges": [
           {
-            "id": "3110104484",
-            "name": "3110104484",
+            "id": "1541975003",
+            "name": "一区",
             "unit": "mm"
           },
           {
-            "id": "3110103984",
-            "name": "3110103984",
+            "id": "1541975002",
+            "name": "前山",
             "unit": "mm"
           },
           {
-            "id": "3110104084",
-            "name": "3110104084",
+            "id": "1541975007",
+            "name": "固增电站",
             "unit": "mm"
           },
           {
-            "id": "3110105084",
-            "name": "3110105084",
+            "id": "1541975004",
+            "name": "立洲坝上",
             "unit": "mm"
           },
           {
-            "id": "3110111084",
-            "name": "3110111084",
+            "id": "1541975006",
+            "name": "小沟河",
             "unit": "mm"
           },
           {
-            "id": "3110120484",
-            "name": "3110120484",
+            "id": "1541955004",
+            "name": "俄公堡坝上",
             "unit": "mm"
           },
           {
-            "id": "3110104584",
-            "name": "3110104584",
+            "id": "1541975001",
+            "name": "隆撒牧场",
             "unit": "mm"
           },
           {
-            "id": "3110102884",
-            "name": "3110102884",
+            "id": "1541955001",
+            "name": "三区",
             "unit": "mm"
           },
           {
-            "id": "3110102700",
-            "name": "3110102700",
+            "id": "1541955002",
+            "name": "争西牧场",
             "unit": "mm"
           },
           {
-            "id": "3110102600",
-            "name": "3110102600",
+            "id": "1541955003",
+            "name": "次德",
             "unit": "mm"
           },
           {
-            "id": "3110103484",
-            "name": "3110103484",
+            "id": "1541955005",
+            "name": "争西光伏",
             "unit": "mm"
           },
           {
-            "id": "3110103284",
-            "name": "3110103284",
+            "id": "1541955007",
+            "name": "让白光伏",
             "unit": "mm"
           },
           {
-            "id": "3110103084",
-            "name": "3110103084",
+            "id": "1540345006",
+            "name": "卡基娃营地",
             "unit": "mm"
           },
           {
-            "id": "3110103384",
-            "name": "3110103384",
+            "id": "1540345004",
+            "name": "卡基娃坝上",
             "unit": "mm"
           },
           {
-            "id": "3110106884",
-            "name": "3110106884",
+            "id": "1548505018",
+            "name": "上通坝营地",
             "unit": "mm"
           },
           {
-            "id": "3110106984",
-            "name": "3110106984",
+            "id": "1540345003",
+            "name": "布昌",
             "unit": "mm"
           },
           {
-            "id": "3110102984",
-            "name": "3110102984",
+            "id": "1540345001",
+            "name": "墨若",
             "unit": "mm"
           },
           {
-            "id": "3110103184",
-            "name": "3110103184",
+            "id": "1540345007",
+            "name": "唐央光伏",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505004",
+            "name": "上通坝坝上",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505008",
+            "name": "禾然色巴村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505011",
+            "name": "安久村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505013",
+            "name": "牧业村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505009",
+            "name": "金青村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505007",
+            "name": "大毛娅坝",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505012",
+            "name": "药王泉",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505014",
+            "name": "扎嘎村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505020",
+            "name": "理塘",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505016",
+            "name": "阿超村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505015",
+            "name": "扎吉贡巴村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505010",
+            "name": "古君村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505001",
+            "name": "濯桑",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505002",
+            "name": "藏坝",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505019",
+            "name": "木拉",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505021",
+            "name": "格西村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505003",
+            "name": "德巫",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505005",
+            "name": "绒古牧场",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505017",
+            "name": "拉拉村",
             "unit": "mm"
           }
         ],
         "evapotranspiration_stations": [],
         "air_temperature_stations": [],
-        "flow_stations": [],
-        "stage_stations": [],
-        "reservoir": [
+        "flow_stations": [
           {
-            "node_id": "1041",
-            "name": "佛子岭",
-            "stations": [
-              {
-                "id": "3110104104",
-                "name": "1041入库流量站"
-              },
-              {
-                "id": "3110104110",
-                "name": "1041出库流量站"
-              },
-              {
-                "id": "3110104183",
-                "name": "1041水位站"
-              }
-            ]
+            "id": "1541971005",
+            "name": "立洲",
+            "unit": "m3/s"
           },
           {
-            "node_id": "1043",
-            "name": "磨子潭",
-            "stations": [
-              {
-                "id": "3110104304",
-                "name": "1043入库流量站"
-              },
-              {
-                "id": "3110104310",
-                "name": "1043出库流量站"
-              },
-              {
-                "id": "3110104383",
-                "name": "1043水位站"
-              }
-            ]
+            "id": "1541951005",
+            "name": "俄公堡",
+            "unit": "m3/s"
           },
           {
-            "node_id": "1039",
-            "name": "白莲崖",
-            "stations": [
-              {
-                "id": "3110103904",
-                "name": "1039入库流量站"
-              },
-              {
-                "id": "3110103910",
-                "name": "1039出库流量站"
-              },
-              {
-                "id": "3110103983",
-                "name": "1039水位站"
-              }
-            ]
+            "id": "1540341000",
+            "name": "卡基娃",
+            "unit": "m3/s"
+          },
+          {
+            "id": "1548501000",
+            "name": "上通坝",
+            "unit": "m3/s"
           }
-        ]
+        ],
+        "stage_stations": [
+          {
+            "id": "1541970001",
+            "name": "立洲",
+            "unit": "m"
+          }
+        ],
+        "reservoir": []
       },
       "catchment_forcing_bindings": [
         {
-          "catchment_id": "4101",
+          "catchment_id": "154197",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110104484",
-                  "weight": 0.06
+                  "id": "1541975003",
+                  "weight": 0.4,
+                  "name": "一区"
                 },
                 {
-                  "id": "3110103984",
-                  "weight": 0.143
+                  "id": "1541975002",
+                  "weight": 0.3,
+                  "name": "前山"
                 },
                 {
-                  "id": "3110104084",
-                  "weight": 0.066
+                  "id": "1541975007",
+                  "weight": 0.15,
+                  "name": "固增电站"
                 },
                 {
-                  "id": "3110105084",
-                  "weight": 0.344
-                },
-                {
-                  "id": "3110111084",
-                  "weight": 0.152
-                },
-                {
-                  "id": "3110120484",
-                  "weight": 0.152
+                  "id": "1541975004",
+                  "weight": 0.15,
+                  "name": "立洲坝上"
                 }
               ]
             },
@@ -562,36 +1328,43 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]
         },
         {
-          "catchment_id": "4301",
+          "catchment_id": "154879",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110104584",
-                  "weight": 0.713
+                  "id": "1541975006",
+                  "weight": 0.6,
+                  "name": "小沟河"
                 },
                 {
-                  "id": "3110104484",
-                  "weight": 0.287
+                  "id": "1541975007",
+                  "weight": 0.3,
+                  "name": "固增电站"
+                },
+                {
+                  "id": "1541955004",
+                  "weight": 0.1,
+                  "name": "俄公堡坝上"
                 }
               ]
             },
@@ -601,40 +1374,33 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]
         },
         {
-          "catchment_id": "4302",
+          "catchment_id": "154849",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110102884",
-                  "weight": 0.268
-                },
-                {
-                  "id": "3110102700",
-                  "weight": 0.377
-                },
-                {
-                  "id": "3110102600",
-                  "weight": 0.355
+                  "id": "1541975001",
+                  "weight": 1.0,
+                  "name": "隆撒牧场"
                 }
               ]
             },
@@ -644,36 +1410,38 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]
         },
         {
-          "catchment_id": "3901",
+          "catchment_id": "1541951",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110103984",
-                  "weight": 0.441
+                  "id": "1541955001",
+                  "weight": 0.8,
+                  "name": "三区"
                 },
                 {
-                  "id": "3110103484",
-                  "weight": 0.559
+                  "id": "1541955004",
+                  "weight": 0.2,
+                  "name": "俄公堡坝上"
                 }
               ]
             },
@@ -683,44 +1451,48 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]
         },
         {
-          "catchment_id": "3902",
+          "catchment_id": "1541952",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110103284",
-                  "weight": 0.28
+                  "id": "1541955002",
+                  "weight": 0.4,
+                  "name": "争西牧场"
                 },
                 {
-                  "id": "3110103084",
-                  "weight": 0.354
+                  "id": "1541955003",
+                  "weight": 0.5,
+                  "name": "次德"
                 },
                 {
-                  "id": "3110103384",
-                  "weight": 0.254
+                  "id": "1541955005",
+                  "weight": 0.05,
+                  "name": "争西光伏"
                 },
                 {
-                  "id": "3110106884",
-                  "weight": 0.111
+                  "id": "1541955007",
+                  "weight": 0.05,
+                  "name": "让白光伏"
                 }
               ]
             },
@@ -730,44 +1502,38 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]
         },
         {
-          "catchment_id": "3903",
+          "catchment_id": "154191",
           "variables": [
             {
               "kind": "precipitation",
               "method": "weighted_average",
               "stations": [
                 {
-                  "id": "3110106984",
-                  "weight": 0.121
+                  "id": "1540345006",
+                  "weight": 0.4,
+                  "name": "卡基娃营地"
                 },
                 {
-                  "id": "3110103484",
-                  "weight": 0.134
-                },
-                {
-                  "id": "3110102984",
-                  "weight": 0.239
-                },
-                {
-                  "id": "3110103184",
-                  "weight": 0.506
+                  "id": "1540345004",
+                  "weight": 0.6,
+                  "name": "卡基娃坝上"
                 }
               ]
             },
@@ -777,18 +1543,2855 @@
               "stations": [],
               "use_station_pet": false,
               "monthly_values": [
-                1.06,
-                1.48,
-                2.54,
-                3.9,
-                4.66,
-                3.36,
-                4.74,
-                4.1,
-                2.82,
-                2.3,
-                1.66,
-                1.28
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154034",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505018",
+                  "weight": 0.2,
+                  "name": "上通坝营地"
+                },
+                {
+                  "id": "1540345003",
+                  "weight": 0.1,
+                  "name": "布昌"
+                },
+                {
+                  "id": "1540345001",
+                  "weight": 0.5,
+                  "name": "墨若"
+                },
+                {
+                  "id": "1540345004",
+                  "weight": 0.2,
+                  "name": "卡基娃坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154847",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1540345007",
+                  "weight": 1.0,
+                  "name": "唐央光伏"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154846",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1540345003",
+                  "weight": 1.0,
+                  "name": "布昌"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548551",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505018",
+                  "weight": 0.5,
+                  "name": "上通坝营地"
+                },
+                {
+                  "id": "1548505004",
+                  "weight": 0.5,
+                  "name": "上通坝坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485513",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505008",
+                  "weight": 0.3,
+                  "name": "禾然色巴村"
+                },
+                {
+                  "id": "1548505011",
+                  "weight": 0.7,
+                  "name": "安久村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548552",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505008",
+                  "weight": 0.2,
+                  "name": "禾然色巴村"
+                },
+                {
+                  "id": "1548505013",
+                  "weight": 0.8,
+                  "name": "牧业村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548553",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505011",
+                  "weight": 0.15,
+                  "name": "安久村"
+                },
+                {
+                  "id": "1548505009",
+                  "weight": 0.6,
+                  "name": "金青村"
+                },
+                {
+                  "id": "1548505007",
+                  "weight": 0.25,
+                  "name": "大毛娅坝"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548554",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505007",
+                  "weight": 0.5,
+                  "name": "大毛娅坝"
+                },
+                {
+                  "id": "1548505012",
+                  "weight": 0.5,
+                  "name": "药王泉"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548555",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505014",
+                  "weight": 0.05,
+                  "name": "扎嘎村"
+                },
+                {
+                  "id": "1548505020",
+                  "weight": 0.5,
+                  "name": "理塘"
+                },
+                {
+                  "id": "1548505016",
+                  "weight": 0.4,
+                  "name": "阿超村"
+                },
+                {
+                  "id": "1548505015",
+                  "weight": 0.05,
+                  "name": "扎吉贡巴村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548556",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505014",
+                  "weight": 0.5,
+                  "name": "扎嘎村"
+                },
+                {
+                  "id": "1548505010",
+                  "weight": 0.5,
+                  "name": "古君村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548557",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505001",
+                  "weight": 0.1,
+                  "name": "濯桑"
+                },
+                {
+                  "id": "1548505002",
+                  "weight": 0.35,
+                  "name": "藏坝"
+                },
+                {
+                  "id": "1548505010",
+                  "weight": 0.55,
+                  "name": "古君村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548558",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505015",
+                  "weight": 0.8,
+                  "name": "扎吉贡巴村"
+                },
+                {
+                  "id": "1548505019",
+                  "weight": 0.1,
+                  "name": "木拉"
+                },
+                {
+                  "id": "1548505001",
+                  "weight": 0.1,
+                  "name": "濯桑"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548559",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505021",
+                  "weight": 0.33,
+                  "name": "格西村"
+                },
+                {
+                  "id": "1548505019",
+                  "weight": 0.34,
+                  "name": "木拉"
+                },
+                {
+                  "id": "1548505003",
+                  "weight": 0.33,
+                  "name": "德巫"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485510",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505005",
+                  "weight": 0.7,
+                  "name": "绒古牧场"
+                },
+                {
+                  "id": "1548505017",
+                  "weight": 0.3,
+                  "name": "拉拉村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485511",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505004",
+                  "weight": 1.0,
+                  "name": "上通坝坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "time_type": "Day",
+      "step_size": 1,
+      "time_axis": {
+        "warmup_period_steps": 60,
+        "correction_period_steps": 0,
+        "historical_display_period_steps": 60,
+        "forecast_period_steps": 12
+      },
+      "nodes": [
+        {
+          "id": "154197",
+          "name": "立洲",
+          "type": "cross_section",
+          "incoming_reach_ids": [
+            "R_154195_TO_154197"
+          ],
+          "outgoing_reach_ids": [],
+          "local_catchment_ids": [
+            "154197",
+            "154849",
+            "154879"
+          ],
+          "station_binding": {
+            "flow_station_id": "1541971005",
+            "stage_station_id": "1541970001"
+          },
+          "use_observed_for_routing": false
+        },
+        {
+          "id": "154195",
+          "name": "俄公堡",
+          "type": "cross_section",
+          "incoming_reach_ids": [
+            "R_154034_TO_154195"
+          ],
+          "outgoing_reach_ids": [
+            "R_154195_TO_154197"
+          ],
+          "local_catchment_ids": [
+            "154191",
+            "1541951",
+            "1541952"
+          ],
+          "station_binding": {
+            "flow_station_id": "1541951005",
+            "stage_station_id": "-99"
+          },
+          "use_observed_for_routing": true
+        },
+        {
+          "id": "154034",
+          "name": "卡基娃",
+          "type": "cross_section",
+          "incoming_reach_ids": [
+            "R_154850_TO_154034"
+          ],
+          "outgoing_reach_ids": [
+            "R_154034_TO_154195"
+          ],
+          "local_catchment_ids": [
+            "154034",
+            "154846",
+            "154847"
+          ],
+          "station_binding": {
+            "flow_station_id": "1540341000",
+            "stage_station_id": "-99"
+          },
+          "use_observed_for_routing": true
+        },
+        {
+          "id": "154850",
+          "name": "上通坝",
+          "type": "cross_section",
+          "incoming_reach_ids": [],
+          "outgoing_reach_ids": [
+            "R_154850_TO_154034"
+          ],
+          "local_catchment_ids": [
+            "1548551",
+            "15485510",
+            "15485511",
+            "15485513",
+            "1548552",
+            "1548553",
+            "1548554",
+            "1548555",
+            "1548556",
+            "1548557",
+            "1548558",
+            "1548559"
+          ],
+          "station_binding": {
+            "flow_station_id": "1548501000",
+            "stage_station_id": "-99"
+          },
+          "use_observed_for_routing": true
+        }
+      ],
+      "reaches": [
+        {
+          "id": "R_154195_TO_154197",
+          "upstream_node_id": "154195",
+          "downstream_node_id": "154197",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.0,
+              "x": 0.05,
+              "n_segments": 0
+            }
+          }
+        },
+        {
+          "id": "R_154034_TO_154195",
+          "upstream_node_id": "154034",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.7,
+              "x": 0.05,
+              "n_segments": 0
+            }
+          }
+        },
+        {
+          "id": "R_154850_TO_154034",
+          "upstream_node_id": "154850",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 0.7,
+              "x": 0.05,
+              "n_segments": 0
+            }
+          }
+        }
+      ],
+      "catchments": [
+        {
+          "id": "154197",
+          "name": "立洲单元",
+          "downstream_node_id": "154197",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 15.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.8,
+              "area": 492.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 2.0,
+              "qs0": 5.0
+            }
+          }
+        },
+        {
+          "id": "154879",
+          "name": "康坞单元",
+          "downstream_node_id": "154197",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 15.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.8,
+              "area": 415.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 2.0,
+              "qs0": 5.0
+            }
+          }
+        },
+        {
+          "id": "154849",
+          "name": "纳瓦单元",
+          "downstream_node_id": "154197",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 2.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.8,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 15.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.995,
+              "cs": 0.8,
+              "area": 146.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 2.0,
+              "qs0": 5.0
+            }
+          }
+        },
+        {
+          "id": "1541951",
+          "name": "俄公堡单元1",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.7,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 1.5,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 45.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.9,
+              "cs": 0.9,
+              "area": 315.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 3.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1541952",
+          "name": "俄公堡单元2",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.7,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 1.5,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 45.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.9,
+              "cs": 0.9,
+              "area": 420.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 3.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "154191",
+          "name": "茶布朗单元",
+          "downstream_node_id": "154195",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 1.5,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 45.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.9,
+              "cs": 0.9,
+              "area": 217.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 1.0,
+              "qrg0": 3.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "154034",
+          "name": "卡基娃单元",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.95,
+              "cs": 0.7,
+              "area": 361.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "154847",
+          "name": "清水沟单元",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.95,
+              "cs": 0.7,
+              "area": 172.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "154846",
+          "name": "陈昌单元",
+          "downstream_node_id": "154034",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 1.4,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 30.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.3,
+              "kkss": 0.85,
+              "kkg": 0.95,
+              "cs": 0.7,
+              "area": 221.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 70.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 0.5,
+              "qrg0": 1.2,
+              "qs0": 1.0
+            }
+          }
+        },
+        {
+          "id": "1548551",
+          "name": "上通坝单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 340.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "15485513",
+          "name": "上通坝13单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 353.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548552",
+          "name": "上通坝2单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 441.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548553",
+          "name": "上通坝3单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 476.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548554",
+          "name": "上通坝4单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 523.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548555",
+          "name": "上通坝5单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 467.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548556",
+          "name": "上通坝6单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 601.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548557",
+          "name": "上通坝7单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 627.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548558",
+          "name": "上通坝8单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 1
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 312.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "1548559",
+          "name": "上通坝9单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 40.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.9,
+              "area": 838.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "15485510",
+          "name": "上通坝10单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 408.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        },
+        {
+          "id": "15485511",
+          "name": "上通坝11单元",
+          "downstream_node_id": "154850",
+          "routing_model": {
+            "name": "MuskingumRoutingModel",
+            "params": {
+              "k_hours": 15.0,
+              "x": 0.01,
+              "n_segments": 0
+            }
+          },
+          "runoff_model": {
+            "name": "XinanjiangCSRunoffModel",
+            "params": {
+              "lag": 1,
+              "wum": 20.0,
+              "wlm": 70.0,
+              "wdm": 40.0,
+              "k": 0.4,
+              "c": 0.1,
+              "b": 0.3,
+              "imp": 0.02,
+              "sm": 20.0,
+              "ex": 1.2,
+              "kss": 0.4,
+              "kg": 0.4,
+              "kkss": 0.9,
+              "kkg": 0.8,
+              "cs": 0.77,
+              "area": 428.0
+            },
+            "state": {
+              "wu": 5.0,
+              "wl": 60.0,
+              "wd": 40.0,
+              "fr": 0.01,
+              "s": 6.0,
+              "qrss0": 3.0,
+              "qrg0": 5.0,
+              "qs0": 4.0
+            }
+          }
+        }
+      ],
+      "stations": {
+        "rain_gauges": [
+          {
+            "id": "1541975003",
+            "name": "一区",
+            "unit": "mm"
+          },
+          {
+            "id": "1541975002",
+            "name": "前山",
+            "unit": "mm"
+          },
+          {
+            "id": "1541975007",
+            "name": "固增电站",
+            "unit": "mm"
+          },
+          {
+            "id": "1541975004",
+            "name": "立洲坝上",
+            "unit": "mm"
+          },
+          {
+            "id": "1541975006",
+            "name": "小沟河",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955004",
+            "name": "俄公堡坝上",
+            "unit": "mm"
+          },
+          {
+            "id": "1541975001",
+            "name": "隆撒牧场",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955001",
+            "name": "三区",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955002",
+            "name": "争西牧场",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955003",
+            "name": "次德",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955005",
+            "name": "争西光伏",
+            "unit": "mm"
+          },
+          {
+            "id": "1541955007",
+            "name": "让白光伏",
+            "unit": "mm"
+          },
+          {
+            "id": "1540345006",
+            "name": "卡基娃营地",
+            "unit": "mm"
+          },
+          {
+            "id": "1540345004",
+            "name": "卡基娃坝上",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505018",
+            "name": "上通坝营地",
+            "unit": "mm"
+          },
+          {
+            "id": "1540345003",
+            "name": "布昌",
+            "unit": "mm"
+          },
+          {
+            "id": "1540345001",
+            "name": "墨若",
+            "unit": "mm"
+          },
+          {
+            "id": "1540345007",
+            "name": "唐央光伏",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505004",
+            "name": "上通坝坝上",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505008",
+            "name": "禾然色巴村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505011",
+            "name": "安久村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505013",
+            "name": "牧业村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505009",
+            "name": "金青村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505007",
+            "name": "大毛娅坝",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505012",
+            "name": "药王泉",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505014",
+            "name": "扎嘎村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505020",
+            "name": "理塘",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505016",
+            "name": "阿超村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505015",
+            "name": "扎吉贡巴村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505010",
+            "name": "古君村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505001",
+            "name": "濯桑",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505002",
+            "name": "藏坝",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505019",
+            "name": "木拉",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505021",
+            "name": "格西村",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505003",
+            "name": "德巫",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505005",
+            "name": "绒古牧场",
+            "unit": "mm"
+          },
+          {
+            "id": "1548505017",
+            "name": "拉拉村",
+            "unit": "mm"
+          }
+        ],
+        "evapotranspiration_stations": [],
+        "air_temperature_stations": [],
+        "flow_stations": [
+          {
+            "id": "1541971005",
+            "name": "立洲",
+            "unit": "m3/s"
+          },
+          {
+            "id": "1541951005",
+            "name": "俄公堡",
+            "unit": "m3/s"
+          },
+          {
+            "id": "1540341000",
+            "name": "卡基娃",
+            "unit": "m3/s"
+          },
+          {
+            "id": "1548501000",
+            "name": "上通坝",
+            "unit": "m3/s"
+          }
+        ],
+        "stage_stations": [
+          {
+            "id": "1541970001",
+            "name": "立洲",
+            "unit": "m"
+          }
+        ],
+        "reservoir": []
+      },
+      "catchment_forcing_bindings": [
+        {
+          "catchment_id": "154197",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1541975003",
+                  "weight": 0.4,
+                  "name": "一区"
+                },
+                {
+                  "id": "1541975002",
+                  "weight": 0.3,
+                  "name": "前山"
+                },
+                {
+                  "id": "1541975007",
+                  "weight": 0.15,
+                  "name": "固增电站"
+                },
+                {
+                  "id": "1541975004",
+                  "weight": 0.15,
+                  "name": "立洲坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154879",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1541975006",
+                  "weight": 0.6,
+                  "name": "小沟河"
+                },
+                {
+                  "id": "1541975007",
+                  "weight": 0.3,
+                  "name": "固增电站"
+                },
+                {
+                  "id": "1541955004",
+                  "weight": 0.1,
+                  "name": "俄公堡坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154849",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1541975001",
+                  "weight": 1.0,
+                  "name": "隆撒牧场"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1541951",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1541955001",
+                  "weight": 0.8,
+                  "name": "三区"
+                },
+                {
+                  "id": "1541955004",
+                  "weight": 0.2,
+                  "name": "俄公堡坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1541952",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1541955002",
+                  "weight": 0.4,
+                  "name": "争西牧场"
+                },
+                {
+                  "id": "1541955003",
+                  "weight": 0.5,
+                  "name": "次德"
+                },
+                {
+                  "id": "1541955005",
+                  "weight": 0.05,
+                  "name": "争西光伏"
+                },
+                {
+                  "id": "1541955007",
+                  "weight": 0.05,
+                  "name": "让白光伏"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154191",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1540345006",
+                  "weight": 0.4,
+                  "name": "卡基娃营地"
+                },
+                {
+                  "id": "1540345004",
+                  "weight": 0.6,
+                  "name": "卡基娃坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154034",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505018",
+                  "weight": 0.2,
+                  "name": "上通坝营地"
+                },
+                {
+                  "id": "1540345003",
+                  "weight": 0.1,
+                  "name": "布昌"
+                },
+                {
+                  "id": "1540345001",
+                  "weight": 0.5,
+                  "name": "墨若"
+                },
+                {
+                  "id": "1540345004",
+                  "weight": 0.2,
+                  "name": "卡基娃坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154847",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1540345007",
+                  "weight": 1.0,
+                  "name": "唐央光伏"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "154846",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1540345003",
+                  "weight": 1.0,
+                  "name": "布昌"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548551",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505018",
+                  "weight": 0.5,
+                  "name": "上通坝营地"
+                },
+                {
+                  "id": "1548505004",
+                  "weight": 0.5,
+                  "name": "上通坝坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485513",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505008",
+                  "weight": 0.3,
+                  "name": "禾然色巴村"
+                },
+                {
+                  "id": "1548505011",
+                  "weight": 0.7,
+                  "name": "安久村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548552",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505008",
+                  "weight": 0.2,
+                  "name": "禾然色巴村"
+                },
+                {
+                  "id": "1548505013",
+                  "weight": 0.8,
+                  "name": "牧业村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548553",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505011",
+                  "weight": 0.15,
+                  "name": "安久村"
+                },
+                {
+                  "id": "1548505009",
+                  "weight": 0.6,
+                  "name": "金青村"
+                },
+                {
+                  "id": "1548505007",
+                  "weight": 0.25,
+                  "name": "大毛娅坝"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548554",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505007",
+                  "weight": 0.5,
+                  "name": "大毛娅坝"
+                },
+                {
+                  "id": "1548505012",
+                  "weight": 0.5,
+                  "name": "药王泉"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548555",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505014",
+                  "weight": 0.05,
+                  "name": "扎嘎村"
+                },
+                {
+                  "id": "1548505020",
+                  "weight": 0.5,
+                  "name": "理塘"
+                },
+                {
+                  "id": "1548505016",
+                  "weight": 0.4,
+                  "name": "阿超村"
+                },
+                {
+                  "id": "1548505015",
+                  "weight": 0.05,
+                  "name": "扎吉贡巴村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548556",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505014",
+                  "weight": 0.5,
+                  "name": "扎嘎村"
+                },
+                {
+                  "id": "1548505010",
+                  "weight": 0.5,
+                  "name": "古君村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548557",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505001",
+                  "weight": 0.1,
+                  "name": "濯桑"
+                },
+                {
+                  "id": "1548505002",
+                  "weight": 0.35,
+                  "name": "藏坝"
+                },
+                {
+                  "id": "1548505010",
+                  "weight": 0.55,
+                  "name": "古君村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548558",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505015",
+                  "weight": 0.8,
+                  "name": "扎吉贡巴村"
+                },
+                {
+                  "id": "1548505019",
+                  "weight": 0.1,
+                  "name": "木拉"
+                },
+                {
+                  "id": "1548505001",
+                  "weight": 0.1,
+                  "name": "濯桑"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "1548559",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505021",
+                  "weight": 0.33,
+                  "name": "格西村"
+                },
+                {
+                  "id": "1548505019",
+                  "weight": 0.34,
+                  "name": "木拉"
+                },
+                {
+                  "id": "1548505003",
+                  "weight": 0.33,
+                  "name": "德巫"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485510",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505005",
+                  "weight": 0.7,
+                  "name": "绒古牧场"
+                },
+                {
+                  "id": "1548505017",
+                  "weight": 0.3,
+                  "name": "拉拉村"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
+              ]
+            }
+          ]
+        },
+        {
+          "catchment_id": "15485511",
+          "variables": [
+            {
+              "kind": "precipitation",
+              "method": "weighted_average",
+              "stations": [
+                {
+                  "id": "1548505004",
+                  "weight": 1.0,
+                  "name": "上通坝坝上"
+                }
+              ]
+            },
+            {
+              "kind": "potential_evapotranspiration",
+              "method": "weighted_average",
+              "stations": [],
+              "use_station_pet": false,
+              "monthly_values": [
+                0.9,
+                1.43,
+                2.27,
+                2.52,
+                1.96,
+                2.56,
+                2.22,
+                1.85,
+                1.26,
+                0.97,
+                0.7,
+                1.0
               ]
             }
           ]

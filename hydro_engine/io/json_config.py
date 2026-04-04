@@ -247,7 +247,8 @@ def _parse_time_axis_dict(
     warmup_start_time: datetime | None = None,
 ) -> ForecastTimeContext:
     """
-    推荐：四段连续步数（预热 / 校正 / 历史显示 / 预报），日历锚点为运行时的 **warmup_start_time**。
+    推荐：四段步数（预热总长 W / 校正尾段 C / 历史展示尾段 H / 预报 F），语义见
+    :meth:`ForecastTimeContext.from_period_counts`；日历锚点为运行时的 **warmup_start_time**。
 
     旧版 ``start_time`` + ``length``：若传入 ``warmup_start_time`` 则覆盖文件中的 ``start_time``。
     """
@@ -656,6 +657,39 @@ def legacy_rainfall_dict_to_station_packages(
     }
 
 
+def apply_realtime_forecast_observed_meteorology_cutoff(
+    station_packages: Dict[str, ForcingData],
+    *,
+    time_context: ForecastTimeContext,
+) -> None:
+    """
+    实时预报：预报起点 T0 为第一个预报步，该时刻及之后尚无可用实测气象强迫。
+    将各测站 P / PET / 气温序列在 [T0, end] 置零（原地修改 station_packages）。
+    """
+    forecast_start_idx = int(
+        (time_context.forecast_start_time - time_context.warmup_start_time)
+        / time_context.time_delta
+    )
+    for station_id, pkg in list(station_packages.items()):
+        patched = pkg
+        for kind in (
+            ForcingKind.PRECIPITATION,
+            ForcingKind.POTENTIAL_EVAPOTRANSPIRATION,
+            ForcingKind.AIR_TEMPERATURE,
+        ):
+            ts = patched.get(kind)
+            if ts is None:
+                continue
+            vals = list(ts.values)
+            if forecast_start_idx < len(vals):
+                vals[forecast_start_idx:] = [0.0] * (len(vals) - forecast_start_idx)
+            patched = patched.with_series(
+                kind,
+                TimeSeries(start_time=ts.start_time, time_step=ts.time_step, values=vals),
+            )
+        station_packages[station_id] = patched
+
+
 def run_calculation_from_json(
     config_path: str | Path,
     station_packages: Dict[str, ForcingData],
@@ -683,28 +717,9 @@ def run_calculation_from_json(
         )
 
     if resolved_mode == "realtime_forecast":
-        forecast_start_idx = int(
-            (time_context.forecast_start_time - time_context.warmup_start_time)
-            / time_context.time_delta
+        apply_realtime_forecast_observed_meteorology_cutoff(
+            station_packages, time_context=time_context
         )
-        for station_id, pkg in list(station_packages.items()):
-            patched = pkg
-            for kind in (
-                ForcingKind.PRECIPITATION,
-                ForcingKind.POTENTIAL_EVAPOTRANSPIRATION,
-                ForcingKind.AIR_TEMPERATURE,
-            ):
-                ts = patched.get(kind)
-                if ts is None:
-                    continue
-                vals = list(ts.values)
-                if forecast_start_idx < len(vals):
-                    vals[forecast_start_idx:] = [0.0] * (len(vals) - forecast_start_idx)
-                patched = patched.with_series(
-                    kind,
-                    TimeSeries(start_time=ts.start_time, time_step=ts.time_step, values=vals),
-                )
-            station_packages[station_id] = patched
 
     for node in scheme.nodes.values():
         setattr(

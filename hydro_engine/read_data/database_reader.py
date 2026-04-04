@@ -15,6 +15,7 @@
     pool_max:   连接池大小，对应 create_engine(pool_size=...)（选填，默认 5）
     sql_yaml_path: 覆盖内置 sql/<dialect>.yaml 的绝对/相对路径（选填）
     normalize:  是否按站点表规范列名（选填，默认 True，需 SENID/TIME）
+    normalize_daily_times_to_midnight:  日表读数后是否将 ``TIME_DT`` 归一到当日 00:00（选填，默认 False；由 ``floodForecastJdbc.json`` 的 ``daydb.normalize_time_to_midnight`` 控制）
 
 ``spec.source`` 不参与 SQL，仅作日志/报错中的数据源说明，可填库名或业务标签。
 """
@@ -123,7 +124,21 @@ def _dm_dmpython_url_and_connect_args(
     if not driver.startswith("dm") or not u.database:
         return raw_url, {}
     schema = u.database
-    cleaned = u.set(database="")
+    # 兼容不同 SQLAlchemy 版本：
+    # - 1.4/2.x: URL.set(...)
+    # - 部分旧版本: namedtuple-like URL，使用 _replace(...)
+    # 对 dmSQLAlchemy + dmPython，传入 URL 对象时部分版本仍会把 database 透传给 DBAPI，
+    # 导致 “database is an invalid keyword argument”。这里改为返回“去掉路径”的字符串 URL，
+    # 并通过 connect_args["schema"] 显式指定模式。
+    raw = str(raw_url).strip()
+    qpos = raw.find("?")
+    base = raw if qpos < 0 else raw[:qpos]
+    query = "" if qpos < 0 else raw[qpos:]
+    slash = base.rfind("/")
+    if slash > raw.lower().find("://") + 2:
+        cleaned = base[:slash] + query
+    else:
+        cleaned = raw
     return cleaned, {"schema": schema}
 
 
@@ -239,10 +254,16 @@ class DatabaseDataReader(IDataReader):
                 df = pd.DataFrame(rows, columns=result.keys())
 
         if normalize:
-            from .file_reader import normalize_station_dataframe
+            from .file_reader import (
+                apply_daily_time_midnight_normalization,
+                normalize_station_dataframe,
+            )
 
             tag = spec.source or str(yaml_path)
-            return normalize_station_dataframe(df, source=tag)
+            df = normalize_station_dataframe(df, source=tag)
+            if bool(opts.get("normalize_daily_times_to_midnight")):
+                df = apply_daily_time_midnight_normalization(df)
+            return df
         return df
 
 

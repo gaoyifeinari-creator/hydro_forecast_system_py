@@ -11,9 +11,9 @@ class IErrorUpdater(ABC):
     """
     实时误差校正接口。
 
-    实现类应仅使用「校正时段」内的模拟与实测残差估计校正量（与
+    实现类应仅使用 T0 前「校正尾段」内的模拟与实测残差估计校正量（与
     :class:`~hydro_engine.core.context.ForecastTimeContext` 中
-    ``correction_start_time`` 至 ``display_start_time`` 对齐），
+    ``correction_start_time`` 至 ``forecast_start_time``（T0）对齐），
     再应用于预报期（``forecast_start_time`` / T0 及之后）的模拟序列。
     """
 

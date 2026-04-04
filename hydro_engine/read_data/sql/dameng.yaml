@@ -18,3 +18,21 @@ hourdb_hourly_station: |
   FROM WDS.HOURDB
   WHERE TIME >= :t_start AND TIME <= :t_end AND SENID = :senid
   ORDER BY TIME
+
+daydb_daily_range: |
+  SELECT SENID, TIME, V, AVGV
+  FROM WDS.DAYDB
+  WHERE TIME >= :t_start AND TIME <= :t_end
+  ORDER BY SENID, TIME
+
+daydb_daily_range_in: |
+  SELECT SENID, TIME, V, AVGV
+  FROM WDS.DAYDB
+  WHERE TIME >= :t_start AND TIME <= :t_end AND SENID IN :senids
+  ORDER BY SENID, TIME
+
+daydb_daily_station: |
+  SELECT SENID, TIME, V, AVGV
+  FROM WDS.DAYDB
+  WHERE TIME >= :t_start AND TIME <= :t_end AND SENID = :senid
+  ORDER BY TIME

@@ -329,6 +329,101 @@ def build_catchment_precip_series(
     return out, warnings
 
 
+def _precip_values_from_station_package(
+    station_packages: Dict[str, ForcingData],
+    station_id: str,
+    times_len: int,
+) -> List[float]:
+    pkg = station_packages.get(station_id)
+    if pkg is None:
+        return [0.0] * times_len
+    ts = pkg.get(ForcingKind.PRECIPITATION)
+    if ts is None:
+        return [0.0] * times_len
+    vals = [float(x) for x in ts.values]
+    if len(vals) != times_len:
+        # 与网格约定不一致时兜底为占位零，避免前端崩溃
+        if len(vals) < times_len:
+            vals = vals + [0.0] * (times_len - len(vals))
+        else:
+            vals = vals[:times_len]
+    return vals
+
+
+def build_catchment_precip_series_from_station_packages(
+    binding_specs: List[Dict[str, Any]],
+    station_packages: Dict[str, ForcingData],
+    times_len: int,
+) -> Tuple[Dict[str, List[float]], List[str]]:
+    """
+    与 `build_catchment_precip_series` 相同权重，但用已组装的 station_packages（可与引擎输入一致）。
+    用于实时预报在 T0 起清空实测气象后，面雨量仍与测站序列一致。
+    """
+    out: Dict[str, List[float]] = {}
+    warnings: List[str] = []
+
+    for spec in binding_specs:
+        catchment_id = str(spec.get("catchment_id") or "").strip()
+        if not catchment_id:
+            continue
+
+        precip_var = None
+        for var in iter_variable_specs(spec):
+            kind = parse_forcing_kind(str(var.get("kind") or var.get("forcing_kind")))
+            if kind is ForcingKind.PRECIPITATION:
+                precip_var = var
+                break
+        if precip_var is None:
+            continue
+
+        stations = precip_var.get("stations") or []
+        if not stations:
+            out[catchment_id] = [0.0] * times_len
+            continue
+
+        weighted_sum = [0.0] * times_len
+        weight_total = 0.0
+        valid_station_count = 0
+
+        for st_item in stations:
+            sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+            if not sid:
+                continue
+
+            try:
+                series = _precip_values_from_station_package(station_packages, sid, times_len)
+                w = float(st_item.get("weight", 1.0))
+                valid_station_count += 1
+                if w > 0:
+                    weight_total += w
+                    for i, v in enumerate(series):
+                        weighted_sum[i] += w * v
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"流域 {catchment_id} 雨量站 {sid} 读取失败: {exc}")
+
+        if weight_total > 0:
+            out[catchment_id] = [v / weight_total for v in weighted_sum]
+        elif valid_station_count > 0:
+            eq_sum = [0.0] * times_len
+            count = 0
+            for st_item in stations:
+                sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+                if not sid:
+                    continue
+                try:
+                    series = _precip_values_from_station_package(station_packages, sid, times_len)
+                    count += 1
+                    for i, v in enumerate(series):
+                        eq_sum[i] += v
+                except Exception:
+                    pass
+            out[catchment_id] = [v / max(count, 1) for v in eq_sum]
+        else:
+            out[catchment_id] = [0.0] * times_len
+
+    return out, warnings
+
+
 def _guess_catchment_area(catchment_obj: Any) -> float:
     runoff_model = getattr(catchment_obj, "runoff_model", None)
     if runoff_model is None:

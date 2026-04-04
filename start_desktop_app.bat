@@ -14,8 +14,8 @@ if defined HYDRO_PYTHON (
       echo Installing matplotlib for: %HYDRO_PYTHON%
       "%HYDRO_PYTHON%" -m pip install matplotlib
     )
-    "%HYDRO_PYTHON%" "scripts\desktop_calculation_app.py"
-    goto :end
+    call "%~dp0start_web_calculation_app.bat"
+    goto :eof
   )
 )
 
@@ -32,7 +32,7 @@ if errorlevel 1 (
   python -m pip install matplotlib
 )
 
-python "scripts\desktop_calculation_app.py"
+call "%~dp0start_web_calculation_app.bat"
 
 :end
 if errorlevel 1 pause

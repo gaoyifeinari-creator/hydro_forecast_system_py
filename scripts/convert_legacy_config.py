@@ -240,6 +240,44 @@ def _wrap_runoff_model(raw_model: Any) -> Dict[str, Any]:
     return {"name": "XinanjiangRunoffModel", "params": {}}
 
 
+def _register_flow_station_catalog(
+    flow_station_seen: Dict[str, Dict[str, Any]],
+    sid: str,
+    *,
+    ds_name: str,
+) -> None:
+    """流量站目录：名称优先采用 HFDataSource.name，缺省回退为站号 id。"""
+    s = str(sid).strip()
+    if not s or s in ("-99", "0"):
+        return
+    display = str(ds_name or "").strip() or s
+    if s not in flow_station_seen:
+        flow_station_seen[s] = {"id": s, "name": display, "unit": "m3/s"}
+        return
+    cur = str(flow_station_seen[s].get("name", "") or "").strip()
+    if cur == s and display != s:
+        flow_station_seen[s]["name"] = display
+
+
+def _register_stage_station_catalog(
+    stage_station_seen: Dict[str, Dict[str, Any]],
+    sid: str,
+    *,
+    ds_name: str,
+) -> None:
+    """水位站目录：名称优先采用 HFDataSource.name，缺省回退为站号 id。"""
+    s = str(sid).strip()
+    if not s or s in ("-99", "0"):
+        return
+    display = str(ds_name or "").strip() or s
+    if s not in stage_station_seen:
+        stage_station_seen[s] = {"id": s, "name": display, "unit": "m"}
+        return
+    cur = str(stage_station_seen[s].get("name", "") or "").strip()
+    if cur == s and display != s:
+        stage_station_seen[s]["name"] = display
+
+
 def _iter_units(sec: Dict[str, Any]) -> List[Dict[str, Any]]:
     units = _pick(sec, ["units", "Units"], [])
     if isinstance(units, list):
@@ -258,9 +296,16 @@ def _build_forcing_vars_from_unit(unit: Dict[str, Any]) -> List[Dict[str, Any]]:
         sid = str(_pick(st, ["id", "stationId", "station_id", "stcd", "preStaId", "preStaSenid"], "")).strip()
         if not sid:
             continue
-        rain_stations.append(
-            {"id": sid, "weight": _to_float(_pick(st, ["weight", "w", "preStaWeight"], 1.0), 1.0)}
-        )
+        pre_name = str(
+            _pick(st, ["preStaName", "preSta_name", "stationName", "staName", "name"], "")
+        ).strip()
+        entry: Dict[str, Any] = {
+            "id": sid,
+            "weight": _to_float(_pick(st, ["weight", "w", "preStaWeight"], 1.0), 1.0),
+        }
+        if pre_name:
+            entry["name"] = pre_name
+        rain_stations.append(entry)
 
     if rain_stations:
         variables.append(
@@ -320,26 +365,42 @@ def _build_forcing_vars_from_unit(unit: Dict[str, Any]) -> List[Dict[str, Any]]:
     return variables
 
 
-def convert_legacy_to_project_config(
-    legacy: Any,
+def _legacy_section_keys_for_time(time_type: str) -> List[str]:
+    """
+    旧系统常见根键：RSHour / RSDay / RSMinute 等，与 time_type 对齐时优先取对应数组。
+    """
+    t = str(time_type).strip().lower()
+    common_tail = ["sections", "secList", "sectionList", "nodes"]
+    if t == "hour":
+        return ["RSHour", "RSDay", *common_tail]
+    if t == "day":
+        return ["RSDay", "RSHour", *common_tail]
+    if t == "minute":
+        return ["RSMinute", "RSHour", "RSDay", *common_tail]
+    return ["RSHour", "RSDay", *common_tail]
+
+
+def _extract_legacy_sections(legacy: Dict[str, Any], time_type: str) -> List[Any]:
+    for key in _legacy_section_keys_for_time(time_type):
+        raw = legacy.get(key)
+        if isinstance(raw, list) and len(raw) > 0:
+            return raw
+    return []
+
+
+def _scheme_payload_from_sections(
+    sections: List[Any],
     *,
-    time_type: str = "Hour",
-    step_size: int = 1,
-    warmup_steps: int = 0,
-    correction_steps: int = 0,
-    historical_steps: int = 0,
-    forecast_steps: int = 24,
+    time_type: str,
+    step_size: int,
+    warmup_steps: int,
+    correction_steps: int,
+    historical_steps: int,
+    forecast_steps: int,
 ) -> Dict[str, Any]:
-    if isinstance(legacy, list):
-        sections = legacy
-        legacy_meta: Dict[str, Any] = {}
-    elif isinstance(legacy, dict):
-        sections = _pick(legacy, ["sections", "secList", "sectionList", "nodes"], [])
-        legacy_meta = legacy
-    else:
-        raise ValueError("Legacy config must be list or dict")
+    """由旧版断面列表生成单个 `schemes[]` 元素（nodes/reaches/catchments/...）。"""
     if not isinstance(sections, list) or not sections:
-        raise ValueError("Legacy config must contain a section list: sections/secList/sectionList/nodes")
+        raise ValueError("sections 必须为非空列表")
 
     nodes: List[Dict[str, Any]] = []
     reaches: List[Dict[str, Any]] = []
@@ -367,6 +428,7 @@ def convert_legacy_to_project_config(
         ds = _pick(sec, ["HFDataSource", "hfDataSource"], {})
         if not isinstance(ds, dict):
             ds = {}
+        ds_name = str(_pick(ds, ["name"], "")).strip()
         node_type = _infer_node_type(sec, ds)
         station_binding = _build_station_binding(node_type, sec, ds)
         node_id = secid
@@ -381,6 +443,10 @@ def convert_legacy_to_project_config(
             if unit_id not in catchments:
                 catchments[unit_id] = {
                     "id": unit_id,
+                    "name": _normalize_name(
+                        _pick(u, ["unitName", "unit_name", "name"], None),
+                        unit_id,
+                    ),
                     # 正确规则：unit 的下游节点就是其所属 sec 本身
                     "downstream_node_id": secid,
                     "routing_model": _wrap_routing_model(_pick(u, ["unitCModel", "unitcmodel"], {})),
@@ -396,8 +462,15 @@ def convert_legacy_to_project_config(
                 if v.get("kind") == "precipitation":
                     for st in v.get("stations", []):
                         sid = str(st.get("id", ""))
-                        if sid and sid not in rain_station_seen:
-                            rain_station_seen[sid] = {"id": sid, "name": sid, "unit": "mm"}
+                        if not sid:
+                            continue
+                        display = str(st.get("name", "") or "").strip() or sid
+                        if sid not in rain_station_seen:
+                            rain_station_seen[sid] = {"id": sid, "name": display, "unit": "mm"}
+                        else:
+                            cur = str(rain_station_seen[sid].get("name", "") or "").strip()
+                            if cur == sid and display != sid:
+                                rain_station_seen[sid]["name"] = display
                 if v.get("kind") == "potential_evapotranspiration":
                     for st in v.get("stations", []):
                         sid = str(st.get("id", ""))
@@ -441,14 +514,16 @@ def convert_legacy_to_project_config(
                     continue
                 existed = {x.get("id") for x in reservoir_item["stations"]}
                 if sid not in existed:
-                    reservoir_item["stations"].append({"id": sid, "name": f"{node_id}{label}"})
+                    if ds_name and label in ("入库流量站", "出库流量站", "水位站"):
+                        st_nm = ds_name
+                    else:
+                        st_nm = f"{node_id}{label}"
+                    reservoir_item["stations"].append({"id": sid, "name": st_nm})
         else:
             f_sid = str(station_binding.get("flow_station_id", "")).strip()
             z_sid = str(station_binding.get("stage_station_id", "")).strip()
-            if f_sid and f_sid not in flow_station_seen:
-                flow_station_seen[f_sid] = {"id": f_sid, "name": f_sid, "unit": "m3/s"}
-            if z_sid and z_sid not in stage_station_seen:
-                stage_station_seen[z_sid] = {"id": z_sid, "name": z_sid, "unit": "m"}
+            _register_flow_station_catalog(flow_station_seen, f_sid, ds_name=ds_name)
+            _register_stage_station_catalog(stage_station_seen, z_sid, ds_name=ds_name)
 
         # 河道拓扑
         if down_id:
@@ -478,37 +553,124 @@ def convert_legacy_to_project_config(
         n["incoming_reach_ids"] = upstream_index.get(nid, [])
         n["outgoing_reach_ids"] = outgoing_index.get(nid, [])
 
-    project = {
+    return {
+        "time_type": time_type,
+        "step_size": int(step_size),
+        "time_axis": {
+            "warmup_period_steps": int(warmup_steps),
+            "correction_period_steps": int(correction_steps),
+            "historical_display_period_steps": int(historical_steps),
+            "forecast_period_steps": int(forecast_steps),
+        },
+        "nodes": nodes,
+        "reaches": reaches,
+        "catchments": list(catchments.values()),
+        "stations": {
+            "rain_gauges": list(rain_station_seen.values()),
+            "evapotranspiration_stations": list(pet_station_seen.values()),
+            "air_temperature_stations": [],
+            "flow_stations": list(flow_station_seen.values()),
+            "stage_stations": list(stage_station_seen.values()),
+            "reservoir": list(reservoir_catalog.values()),
+        },
+        "catchment_forcing_bindings": list(forcing_bindings.values()),
+    }
+
+
+def convert_legacy_to_project_config(
+    legacy: Any,
+    *,
+    time_type: str = "Hour",
+    step_size: int = 1,
+    warmup_steps: int = 0,
+    correction_steps: int = 0,
+    historical_steps: int = 0,
+    forecast_steps: int = 24,
+) -> Dict[str, Any]:
+    """
+    旧版 JSON → 新项目 `metadata` + `schemes[]`。
+
+    若根对象为 dict 且 **同时** 存在非空的 `RSHour` 与 `RSDay`，则生成 **两个** scheme：
+    - RSHour → time_type=Hour，step_size 使用参数 `step_size`
+    - RSDay → time_type=Day，step_size=1
+
+    否则行为与原先一致：只生成一个 scheme（按 time_type 选取 RSHour/RSDay 之一或 sections 等）。
+    """
+    legacy_meta: Dict[str, Any] = {}
+    ta_kw = dict(
+        warmup_steps=int(warmup_steps),
+        correction_steps=int(correction_steps),
+        historical_steps=int(historical_steps),
+        forecast_steps=int(forecast_steps),
+    )
+
+    if isinstance(legacy, list):
+        legacy_meta = {}
+        schemes_out = [
+            _scheme_payload_from_sections(
+                legacy,
+                time_type=time_type,
+                step_size=int(step_size),
+                **ta_kw,
+            )
+        ]
+    elif isinstance(legacy, dict):
+        legacy_meta = legacy
+        hour = legacy.get("RSHour")
+        day = legacy.get("RSDay")
+        hour_ok = isinstance(hour, list) and len(hour) > 0
+        day_ok = isinstance(day, list) and len(day) > 0
+
+        if hour_ok and day_ok:
+            schemes_out = [
+                _scheme_payload_from_sections(
+                    hour,
+                    time_type="Hour",
+                    step_size=int(step_size),
+                    **ta_kw,
+                ),
+                _scheme_payload_from_sections(
+                    day,
+                    time_type="Day",
+                    step_size=1,
+                    **ta_kw,
+                ),
+            ]
+        else:
+            sections = _extract_legacy_sections(legacy, time_type)
+            if not sections:
+                sections = _pick(legacy, ["sections", "secList", "sectionList", "nodes"], [])
+            if not isinstance(sections, list) or not sections:
+                raise ValueError(
+                    "Legacy config must contain a non-empty section list. "
+                    "Supported keys include: RSHour, RSDay, RSMinute, sections, secList, sectionList, nodes "
+                    "(for dict roots: if both RSHour and RSDay are non-empty, both are converted)."
+                )
+            schemes_out = [
+                _scheme_payload_from_sections(
+                    sections,
+                    time_type=time_type,
+                    step_size=int(step_size),
+                    **ta_kw,
+                )
+            ]
+    else:
+        raise ValueError("Legacy config must be list or dict")
+
+    desc = "Converted from legacy secid/downSecId config by convert_legacy_config.py"
+    if isinstance(legacy, dict):
+        h = legacy.get("RSHour")
+        d = legacy.get("RSDay")
+        if isinstance(h, list) and isinstance(d, list) and len(h) > 0 and len(d) > 0:
+            desc += " Multi-scale: RSHour→Hour scheme, RSDay→Day scheme."
+
+    return {
         "metadata": {
             "name": _normalize_name(_pick(legacy_meta, ["name", "projectName"], None), "converted_legacy_project"),
-            "description": "Converted from legacy secid/downSecId config by convert_legacy_config.py",
+            "description": desc,
         },
-        "schemes": [
-            {
-                "time_type": time_type,
-                "step_size": int(step_size),
-                "time_axis": {
-                    "warmup_period_steps": int(warmup_steps),
-                    "correction_period_steps": int(correction_steps),
-                    "historical_display_period_steps": int(historical_steps),
-                    "forecast_period_steps": int(forecast_steps),
-                },
-                "nodes": nodes,
-                "reaches": reaches,
-                "catchments": list(catchments.values()),
-                "stations": {
-                    "rain_gauges": list(rain_station_seen.values()),
-                    "evapotranspiration_stations": list(pet_station_seen.values()),
-                    "air_temperature_stations": [],
-                    "flow_stations": list(flow_station_seen.values()),
-                    "stage_stations": list(stage_station_seen.values()),
-                    "reservoir": list(reservoir_catalog.values()),
-                },
-                "catchment_forcing_bindings": list(forcing_bindings.values()),
-            }
-        ],
+        "schemes": schemes_out,
     }
-    return project
 
 
 def main() -> None:

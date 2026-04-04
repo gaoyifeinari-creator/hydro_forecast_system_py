@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | **工程路径** | `d:\floodForecastSystem\hydro_project` |
-| **交接文档编写日期** | **2026-03-25**（星期三） |
+| **交接文档编写日期** | **2026-03-25**（星期三）；**2026-04-03** 补充实时预报 T0 与 Web aux 对齐（见 §10.6、§11） |
 | **说明** | 概括架构、时间轴、JSON、产流/汇流模型与率定边界，供上下文重置或新人快速对齐。 |
 
 ---
@@ -39,7 +39,7 @@
 | **`models/runoff/`** | `DummyRunoffModel`、`XinanjiangRunoffModel`（对齐 `HFXAJAlg.java` + 单位线）、`XinanjiangCSRunoffModel`（对齐 `HFXAJCSAlg.java` 滞时河网汇流）、`TankRunoffModel`、`SnowmeltRunoffModel`；**`calibration_bounds.py`** 提供新安江/XAJCS 与 Java `m_douParaDBArr/UBArr/IsCaliArr` 一致的率定上下界及 `clip_*`、向量打包辅助函数。 |
 | **`models/correction/`** | 如 `AR1ErrorUpdater`。 |
 | **`models/routing/`** | `DummyRoutingModel`、`MuskingumRoutingModel`（对齐 Java `HFMSKAlg`：NE=2；Dt/x1/x2约束违规时 warning 后继续）。 |
-| **`io/json_config.py`** | 见下一节。 |
+| **`io/json_config.py`** | 方案解析、`run_calculation_from_json`、`apply_realtime_forecast_observed_meteorology_cutoff`（实时预报 T0 起气象截断）；详见 §4、§10.6。 |
 
 ---
 
@@ -63,7 +63,8 @@
 | `CalculationEngine.run` | `run(scheme, catchment_forcing: Dict[id, ForcingData], time_context: ForecastTimeContext, observed_flows: Dict[id, TimeSeries] \| None)` |
 | `load_scheme_from_json` | `(path, time_type: str, step_size: int, warmup_start_time: datetime \| None) -> (scheme, binding_specs, ForecastTimeContext)`；**有 `schemes` 时须传 `warmup_start_time`** |
 | `build_catchment_forcing_from_station_packages` | 同上，增加 `warmup_start_time`，返回 `(scheme, catchment_forcing, time_context)` |
-| `run_calculation_from_json` | `(path, station_packages, time_type, step_size, warmup_start_time=..., observed_flows=...)`；`station_packages` 为 `Dict[station_id, ForcingData]` |
+| `apply_realtime_forecast_observed_meteorology_cutoff` | `(station_packages, *, time_context)`：**原地**将各站 **P / PET / 气温** 从 **预报起点 T0（索引含 T0）** 至末尾置 **0**；业务含义为实时预报下 T0 起不使用“实测”气象。 |
+| `run_calculation_from_json` | `(path, station_packages, time_type, step_size, warmup_start_time=..., observed_flows=..., forecast_mode=..., catchment_workers=...)`；`station_packages` 为 `Dict[station_id, ForcingData]`。`forecast_mode="realtime_forecast"` 时**在入池计算前**调用上述截断；`historical_simulation` 不截断。 |
 
 新安江 / XAJCS：**必须**提供 `precipitation` 与 `potential_evapotranspiration`。
 
@@ -182,7 +183,7 @@ python -m unittest discover -v
 
 入口依赖关系已更新：
 - `hydro_engine/calibration/calibrator.py`：不再依赖 `scripts/calculation_app_common.py` 的读数/拼装逻辑
-- `scripts/desktop_calculation_app.py`：改为依赖 `hydro_engine/io/*`
+- `scripts/calculation_pipeline_runner.py`：改为依赖 `hydro_engine/io/*`（作为通用计算入口）
 - `scripts/web_calculation_app.py`：改为依赖 `hydro_engine/io/*`
 
 ### 10.4 注意事项（给后续智能体）
@@ -206,8 +207,25 @@ python -m unittest discover -v
 - 若 `catchments[].downstream_node_id` 缺失，则自动回退为其所属的 owner 节点（即对应 `nodes[].local_catchment_ids` 里的 node id）。
 - 若 `catchments[].downstream_node_id` 存在，则要求与 owner 节点一致（不一致会在加载阶段直接报错）。
 
-另外，为减少桌面端“节点全 0 误判”的问题：
-- `desktop_calculation_app.py` 在节点缺失 `node_total_inflows` 序列时，表格显示空值（None）而不是填 `0.0`。
+另外，前端应允许“序列缺失 => 显示空值（None）”，避免把空序列误判为 `0.0`。
+
+---
+
+### 10.6 实时预报：T0 气象截断与 Web `aux` 与引擎对齐
+
+**背景**：预报起点 **T0** 定义为**第一个预报时间步**。实时业务上，T0 及之后的**雨量/蒸发/气温“实测”**通常尚未到达，引擎在 `run_calculation_from_json` 中已对 `forecast_mode=realtime_forecast` 将 `station_packages` 内对应序列从 **T0（含）** 起置 **0** 后再 `DataPool` 合成与计算。
+
+**曾有问题**：`scripts/calculation_pipeline_runner.py` 在组装 **`aux`**（`station_precip`、`catchment_rain` 等）时早于或未同步该截断：测站图仍用库表值，**面雨量**仍从 `rain_df` 加权，导致 **T0 仍显示“实测”雨量**，与引擎实际强迫不一致。
+
+**当前约定（代码已实现）**：
+
+1. **`run_calculation_pipeline`**：在 `forecast_mode=realtime_forecast` 时，于生成 aux **之前**调用 `apply_realtime_forecast_observed_meteorology_cutoff(station_packages, time_context)`；**`catchment_rain`** 改为 `build_catchment_precip_series_from_station_packages`（与 `station_packages` 同权、同源），从而 **“仅读取数据”**（`compute_forecast=False`）时图表也与引擎输入一致。
+2. **`runtime_cache`**：增加 **`binding_specs`**，供分步 UI（先读数、再点预报）使用。
+3. **`run_forecast_from_runtime_cache`**：在 `run_calculation_from_json` **之后**，对实时模式用**已修补**的 `station_packages` 重建 `station_precip` / `station_pet` / `station_temp` / `catchment_rain`，并回写 `runtime_cache["aux_base"]`，避免 aux 仍为读数阶段的未截断副本。
+
+**实现落点**：`hydro_engine/io/json_config.py`（截断函数 + `run_calculation_from_json` 内调用）、`hydro_engine/io/calculation_app_data_builder.py`（`build_catchment_precip_series_from_station_packages`）、`scripts/calculation_pipeline_runner.py`。
+
+**率定等路径**：若仍直接使用 `build_catchment_precip_series(rain_df, ...)` 且不经上述截断，则保留“原始库表语义”，与 Web 实时预报入口的差异为**预期**。
 
 ---
 
@@ -219,6 +237,7 @@ python -m unittest discover -v
 | **2026-03-25**（更新） | 补充：`ForecastTimeContext` 与四段步数、`schemes` 自包含、`warmup_start_time` 运行时传入；`XinanjiangRunoffModel`/`XinanjiangCSRunoffModel` 与 Java 对齐；`calibration_bounds`；`CalculationEngine` 与校正链；测试与 API 表更新。 |
 | **2026-03-25**（更新 2） | `DEVELOPMENT_MANUAL.md` 全面对齐：`schemes`/`catchment_forcing_bindings`、`ForcingData` 示例、产流模型与测试列表、§11 差异摘要；与 `HANDOVER` 交叉引用。 |
 | **2026-03-30**（更新 3） | 解决拓扑冗余导致的 `downstream_node_id` 推导问题：缺失时回退为 owner 节点；并修复桌面端“节点全 0 误判”的展示逻辑。 |
+| **2026-04-03**（更新 4） | **实时预报 T0 气象**：抽出 `apply_realtime_forecast_observed_meteorology_cutoff`；Web pipeline 在 aux 前截断；`catchment_rain` 与测站序列改由 `station_packages` 派生；`runtime_cache` 增加 `binding_specs`；`run_forecast_from_runtime_cache` 计算后重写雨量相关 aux。详见 `DEVELOPMENT_MANUAL.md` §3.6、§3.8、§5 与本文 §10.6。 |
 
 ---
 

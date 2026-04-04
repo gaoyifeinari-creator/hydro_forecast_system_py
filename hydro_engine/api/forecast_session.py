@@ -7,6 +7,9 @@
 对外（UI/API）：所有时序数据使用 pandas.Series / pandas.DataFrame
 对内（底层引擎）：调用 run_calculation 时，由本类负责转换为 TimeSeries / ForcingData
 
+推荐导入：
+    from hydro_engine.api import ForecastSession
+
 使用示例：
     session = ForecastSession("configs/forecastSchemeConf.json")
     session.setup_time_axis(warmup_start=datetime(2024, 6, 1), ...)
@@ -111,18 +114,19 @@ class ForecastSession:
         # 解析时间类型
         tt = parse_time_type(time_type)
         
-        # 计算历史显示步数（= 预报步数，保持对称）
-        historical_steps = forecast_steps
-        
-        # 构建时间上下文
+        # 嵌套时间轴：H≤W、C≤H；历史展示长度不超过预热总长，且与预报步对称取 min
+        w, f = int(warmup_steps), int(forecast_steps)
+        historical_steps = min(f, w)
+        c_eff = min(int(correction_steps), historical_steps)
+
         self.time_context = ForecastTimeContext.from_period_counts(
             warmup_start_time=warmup_start,
             time_type=tt,
             step_size=step_size,
-            warmup_period_steps=warmup_steps,
-            correction_period_steps=correction_steps,
+            warmup_period_steps=w,
+            correction_period_steps=c_eff,
             historical_display_period_steps=historical_steps,
-            forecast_period_steps=forecast_steps,
+            forecast_period_steps=f,
         )
         
         # 从 JSON 加载方案
