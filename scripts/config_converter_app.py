@@ -113,8 +113,22 @@ def _load_convert_legacy() -> Any:
     return mod.convert_legacy_to_project_config
 
 
-def _pick_file(title: str) -> Optional[str]:
+def _load_xml_to_legacy() -> Any:
+    path = SCRIPTS_DIR / "xml_to_json.py"
+    spec = importlib.util.spec_from_file_location("xml_to_json", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("无法加载 xml_to_json.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fn = getattr(mod, "xml_to_hierarchical_json_obj_by_timeType", None)
+    if not callable(fn):
+        raise RuntimeError("xml_to_json.py 缺少 xml_to_hierarchical_json_obj_by_timeType()")
+    return fn
+
+
+def _pick_file(title: str, *, filetypes: Optional[List[tuple[str, str]]] = None) -> Optional[str]:
     init = _dialog_initial_dir()
+    types = filetypes or [("JSON", "*.json"), ("所有文件", "*.*")]
     src = f"""import tkinter as tk
 from tkinter import filedialog
 root = tk.Tk()
@@ -129,7 +143,7 @@ try:
         parent=root,
         title={repr(title)},
         initialdir={repr(init)},
-        filetypes=[("JSON", "*.json"), ("所有文件", "*.*")],
+        filetypes={repr(types)},
     ) or ""
 finally:
     root.destroy()
@@ -212,20 +226,31 @@ def main() -> None:
     )
 
     convert_fn = _load_convert_legacy()
+    xml_to_legacy_fn = _load_xml_to_legacy()
 
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("源：旧版方案")
+        source_mode = st.radio("输入类型", ["JSON", "XML"], horizontal=True, key="source_mode")
+        src_label = "旧版 JSON 文件路径" if source_mode == "JSON" else "原始 XML 文件路径"
+        src_placeholder = (
+            str(PROJECT_ROOT / "legacy.json")
+            if source_mode == "JSON"
+            else str(PROJECT_ROOT / "HFSchemeConf.xml")
+        )
         legacy_path = st.text_input(
-            "旧版 JSON 文件路径",
+            src_label,
             key="legacy_path_input",
-            placeholder=str(PROJECT_ROOT / "legacy.json"),
+            placeholder=src_placeholder,
         )
         b1, b2 = st.columns(2)
         with b1:
-            if st.button("浏览选择旧版文件…"):
+            if st.button("浏览选择输入文件…"):
                 try:
-                    p = _pick_file("选择旧版预报方案 JSON")
+                    if source_mode == "JSON":
+                        p = _pick_file("选择旧版预报方案 JSON", filetypes=[("JSON", "*.json"), ("所有文件", "*.*")])
+                    else:
+                        p = _pick_file("选择原始预报方案 XML", filetypes=[("XML", "*.xml"), ("所有文件", "*.*")])
                     if p:
                         st.session_state["legacy_path_pending"] = p
                 except Exception as e:
@@ -235,7 +260,12 @@ def main() -> None:
                     )
                 st.rerun()
         with b2:
-            up = st.file_uploader("或上传 JSON", type=["json"], key="legacy_upload")
+            upload_types = ["json"] if source_mode == "JSON" else ["xml"]
+            up = st.file_uploader(
+                f"或上传{source_mode}文件",
+                type=upload_types,
+                key="legacy_upload",
+            )
         if up is not None:
             st.session_state["legacy_upload_bytes"] = up.getvalue()
         else:
@@ -293,16 +323,32 @@ def main() -> None:
     legacy_err: Optional[str] = None
     if st.session_state.get("legacy_upload_bytes"):
         try:
-            legacy_obj = json.loads(
-                st.session_state["legacy_upload_bytes"].decode("utf-8")
-            )
+            if source_mode == "JSON":
+                legacy_obj = json.loads(
+                    st.session_state["legacy_upload_bytes"].decode("utf-8")
+                )
+            else:
+                fd, tmp_path = tempfile.mkstemp(suffix=".xml")
+                os.close(fd)
+                try:
+                    p = Path(tmp_path)
+                    p.write_bytes(st.session_state["legacy_upload_bytes"])
+                    legacy_obj = xml_to_legacy_fn(str(p))
+                finally:
+                    try:
+                        Path(tmp_path).unlink()
+                    except OSError:
+                        pass
         except Exception as e:
             legacy_err = f"上传文件解析失败: {e}"
     elif legacy_path.strip():
         lp = Path(legacy_path.strip())
         if lp.is_file():
             try:
-                legacy_obj = json.loads(lp.read_text(encoding="utf-8"))
+                if source_mode == "JSON":
+                    legacy_obj = json.loads(lp.read_text(encoding="utf-8"))
+                else:
+                    legacy_obj = xml_to_legacy_fn(str(lp))
             except Exception as e:
                 legacy_err = f"读取失败: {e}"
 
