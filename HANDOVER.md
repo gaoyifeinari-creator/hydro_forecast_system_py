@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | **工程路径** | `d:\floodForecastSystem\hydro_project` |
-| **交接文档编写日期** | **2026-03-25**（星期三）；**2026-04-03** 补充实时预报 T0 与 Web aux 对齐（见 §10.6、§11） |
+| **交接文档编写日期** | **2026-03-25**（星期三）；**2026-04-03** 补充实时预报 T0 与 Web aux 对齐（见 §10.6、§11）；**2026-04-17** 补充实时读库统一截断、全站一次 IN、预报情景面雨串联（见 §10.7、§11） |
 | **说明** | 概括架构、时间轴、JSON、产流/汇流模型与率定边界，供上下文重置或新人快速对齐。 |
 
 ---
@@ -39,7 +39,8 @@
 | **`models/runoff/`** | `DummyRunoffModel`、`XinanjiangRunoffModel`（对齐 `HFXAJAlg.java` + 单位线）、`XinanjiangCSRunoffModel`（对齐 `HFXAJCSAlg.java` 滞时河网汇流）、`TankRunoffModel`、`SnowmeltRunoffModel`；**`calibration_bounds.py`** 提供新安江/XAJCS 与 Java `m_douParaDBArr/UBArr/IsCaliArr` 一致的率定上下界及 `clip_*`、向量打包辅助函数。 |
 | **`models/correction/`** | 如 `AR1ErrorUpdater`。 |
 | **`models/routing/`** | `DummyRoutingModel`、`MuskingumRoutingModel`（对齐 Java `HFMSKAlg`：NE=2；Dt/x1/x2约束违规时 warning 后继续）。 |
-| **`io/json_config.py`** | 方案解析、`run_calculation_from_json`、`apply_realtime_forecast_observed_meteorology_cutoff`（实时预报 T0 起气象截断）；详见 §4、§10.6。 |
+| **`io/json_config.py`** | 方案解析、`run_calculation_from_json`（含情景面雨关键字参数）、`apply_realtime_forecast_observed_meteorology_cutoff`（实时预报 T0 起气象截断）；详见 §4、§10.6、§10.7。 |
+| **`forecast/`** | 预报面雨三情景、`scenario_forcing` 预报段覆写、`ForecastDataManager`；与 `run_calculation_from_json`、pipeline/Web 串联。详见 `DEVELOPMENT_MANUAL.md` §3.6、§5.3、§10.6b。 |
 
 ---
 
@@ -64,7 +65,7 @@
 | `load_scheme_from_json` | `(path, time_type: str, step_size: int, warmup_start_time: datetime \| None) -> (scheme, binding_specs, ForecastTimeContext)`；**有 `schemes` 时须传 `warmup_start_time`** |
 | `build_catchment_forcing_from_station_packages` | 同上，增加 `warmup_start_time`，返回 `(scheme, catchment_forcing, time_context)` |
 | `apply_realtime_forecast_observed_meteorology_cutoff` | `(station_packages, *, time_context)`：**原地**将各站 **P / PET / 气温** 从 **预报起点 T0（索引含 T0）** 至末尾置 **0**；业务含义为实时预报下 T0 起不使用“实测”气象。 |
-| `run_calculation_from_json` | `(path, station_packages, time_type, step_size, warmup_start_time=..., observed_flows=..., forecast_mode=..., catchment_workers=...)`；`station_packages` 为 `Dict[station_id, ForcingData]`。`forecast_mode="realtime_forecast"` 时**在入池计算前**调用上述截断；`historical_simulation` 不截断。 |
+| `run_calculation_from_json` | 位置参数同上；**仅关键字参数**：`catchment_scenario_rainfall`、`scenario_precipitation`、`forecast_multiscenario`（预报情景面雨与三情景引擎）。`station_packages` 为 `Dict[station_id, ForcingData]`。`forecast_mode="realtime_forecast"` 时**在入池计算前**调用上述截断；`historical_simulation` 不截断。`forecast_multiscenario=True` 时返回字典键 **`multiscenario_engine_outputs`**。详见 `DEVELOPMENT_MANUAL.md` §5.3、`hydro_engine/forecast/scenario_forcing.py`。 |
 
 新安江 / XAJCS：**必须**提供 `precipitation` 与 `potential_evapotranspiration`。
 
@@ -111,7 +112,7 @@ python -m unittest discover -v
 | 路径 | 内容 |
 |------|------|
 | **`configs/example_forecast_config.json`** | 示例：`schemes`、四段 `time_axis`、节点/河道/子流域/绑定/测站。 |
-| **`DEVELOPMENT_MANUAL.md`** | 开发说明（目录、核心流程、JSON §7、`run_calculation_from_json` 示例）；与本手册一致，细节以本节 API/架构表与 §7 为准。 |
+| **`DEVELOPMENT_MANUAL.md`** | 开发说明（目录、核心流程、JSON §7、`run_calculation_from_json` 示例）；**§5.4 数据流程详解**（分层表、Mermaid 总图、引擎内放大图、`runtime_cache`、Web 缓存键）。与本手册一致，细节以本节 API/架构表与 §7 为准。 |
 | **`docs/FORCING_DATA_ARCHITECTURE.md`** | 强迫数据架构。 |
 
 ---
@@ -165,14 +166,16 @@ python -m unittest discover -v
 ### 10.2 应用如何传入“本次需要的 SENID”
 
 桌面端/Web 入口在加载 `scheme` 后，会先统计本次计算真正用到的测站集合，再传给数据库读取：
-- 雨量/PET：从 `binding_specs` 扫描 `PRECIPITATION` 以及 `POTENTIAL_EVAPOTRANSPIRATION`（仅当 `use_station_pet=true`）
-- 实测流量：从 `scheme.nodes` 聚合 `observed_station_id` 与 `observed_inflow_station_id`
+- **气象侧（写入同一张“雨量站”表 df）**：从 `binding_specs` 扫描 **`PRECIPITATION`**、**`POTENTIAL_EVAPOTRANSPIRATION`**（仅当 `use_station_pet=true`）、**`AIR_TEMPERATURE`**
+- **流量侧**：从 `scheme.nodes` 聚合 **`observed_station_id`** 与 **`observed_inflow_station_id`**
+- **并集一次 IN**：**`collect_all_station_ids_for_calculation(binding_specs, scheme)`**；在 JDBC 或「雨/流量路径为同一 JSON 库」时作为 **`unified_station_senids`** 传给 **`load_rain_flow_for_calculation`**，**单次库查询**拉取雨/流/温所需全部 `SENID`（避免每类站重复打库）。
 
-相关实现入口在新增模块：
+相关实现入口：
 - `hydro_engine/io/calculation_app_data_loader.py`
 
-数据库读取函数新增参数：
-- `load_rain_flow_for_calculation(..., rain_senids=..., flow_senids=..., senid_chunk_size=...)`
+数据库读取要点：
+- `load_rain_flow_for_calculation(..., rain_senids=..., flow_senids=..., senid_chunk_size=..., station_table_query_end=..., unified_station_senids=...)`：`station_table_query_end` 为实时预报时库表 **`t_end`** 上界（与 **`station_observation_query_end_realtime(time_context)`** 一致），**雨、流、温共用**；`rain_meteorology_time_end` 为兼容别名。
+- **`clip_station_dataframe_rows_before_forecast_start`**：双 CSV 等场景下去掉 **≥ 预报起点** 的行。
 - `load_station_hourly_frame(..., senids=..., senid_chunk_size=...)`
 
 ### 10.3 结构拆分（方案B：阶段1+2）
@@ -229,6 +232,50 @@ python -m unittest discover -v
 
 ---
 
+### 10.7 实时预报：测站库表统一截断 + 预报情景面雨（2026-04-17）
+
+**测站读库（与 §10.2 衔接）**
+
+- **目标**：在历史任意 **T0** 复现实时预报时，库中 **不得在 T0 之后** 再取雨、流、温等记录（否则与当时业务可见数据不一致）。
+- **做法**：`forecast_mode=realtime_forecast` 时，`load_rain_flow_for_calculation` 使用 **`station_table_query_end = station_observation_query_end_realtime(time_context)`**（即 `forecast_start_time - time_delta`）作为 SQL **`TIME <= t_end`**；**流量站与雨量站同一上界**，不再单独读到 `end_time`。
+- **一次 IN**：同库时 **`unified_station_senids = collect_all_station_ids_for_calculation(...)`**，与 `rain_senids|flow_senids` 并集一致，**一次查询**；双 CSV 仍两次读文件，但 **`time_end` 同为截断上界**，并辅以 **`clip_station_dataframe_rows_before_forecast_start`**。
+
+**预报情景面雨（可选）**
+
+- **模块**：`hydro_engine/forecast/`（`CatchmentForecastRainfall`、`ForecastDataManager.forecast_rainfall_from_dataframe`、`scenario_forcing.patch_*` / `load_catchment_forecast_rainfall_map_from_csv`）。
+- **计算**：`run_calculation_from_json` 合成子流域强迫后 **`deepcopy`**，仅覆写 **预报段** `[T0, end)` 的 P（及可选 PET）；`forecast_multiscenario=True` 时三情景各跑一遍引擎，主序列由 **`scenario_precipitation`** 指定，完整结果在 **`multiscenario_engine_outputs`**。
+- **应用入口**：`scripts/calculation_pipeline_runner.py`（`forecast_scenario_rain_csv` 等）、`scripts/web_calculation_app.py`（侧栏参数；缓存键含 CSV 路径与默认子流域 id，**不含**主情景/三情景开关以便复用读数缓存）。
+
+**测试**：`tests/test_json_config_pipeline.py`（`test_station_observation_query_end_realtime`、`test_run_calculation_scenario_rainfall_multiscenario`）、`tests/test_forecast_skeleton_pipeline.py`。
+
+---
+
+### 10.8 前后时标（dbtype）接入与前时标末端漏读修复（2026-04-20）
+
+**配置与展示**
+
+- 在 Python 方案配置中引入 `schemes[].dbtype`：
+  - `-1`：前时标
+  - `0`：后时标
+- Web 侧栏新增“当前时标模式（只读展示）”，并按 **`time_type + step_size` 精确匹配**当前方案读取 `dbtype`，避免跨方案误判。
+
+**时间轴与读数链路对齐**
+
+- `run_calculation_pipeline` 中新增前后时标处理：
+  1. 先按 `dbtype` 计算实际预报起点（后时标 `+1 step`，前时标不偏移）
+  2. 再回推 `warmup_start_time`
+- 前时标下新增“读窗平移 + 标签回拨”组合处理（与旧系统语义一致）：
+  - 读窗整体平移：`read_start/read_end/station_table_query_end += time_delta`
+  - 读后回拨标签：`TIME_DT/TIME -= time_delta`
+
+**修复的问题**
+
+- 现象：前时标下最后一个实测值经常与前一个值相同。
+- 根因：仅做标签回拨、未做读窗平移，导致末端漏读后被 `interp` 复制前值。
+- 结果：补齐读窗平移后，末端实测值按数据库真实末条落时显示，不再“尾点复制”。
+
+---
+
 ## 11. 版本与变更记录（摘要）
 
 | 日期 | 摘要 |
@@ -238,6 +285,8 @@ python -m unittest discover -v
 | **2026-03-25**（更新 2） | `DEVELOPMENT_MANUAL.md` 全面对齐：`schemes`/`catchment_forcing_bindings`、`ForcingData` 示例、产流模型与测试列表、§11 差异摘要；与 `HANDOVER` 交叉引用。 |
 | **2026-03-30**（更新 3） | 解决拓扑冗余导致的 `downstream_node_id` 推导问题：缺失时回退为 owner 节点；并修复桌面端“节点全 0 误判”的展示逻辑。 |
 | **2026-04-03**（更新 4） | **实时预报 T0 气象**：抽出 `apply_realtime_forecast_observed_meteorology_cutoff`；Web pipeline 在 aux 前截断；`catchment_rain` 与测站序列改由 `station_packages` 派生；`runtime_cache` 增加 `binding_specs`；`run_forecast_from_runtime_cache` 计算后重写雨量相关 aux。详见 `DEVELOPMENT_MANUAL.md` §3.6、§3.8、§5 与本文 §10.6。 |
+| **2026-04-17**（更新 5） | **实时读库**：雨/流/温共用 `station_table_query_end`；`collect_all_station_ids_for_calculation` + `unified_station_senids` 同库 **一次 IN**；`collect_rain_station_ids` 含气温；`clip_station_dataframe_rows_before_forecast_start`。 **预报情景面雨**：`run_calculation_from_json` 关键字参数 + `scenario_forcing` + pipeline/Web 参数与 `runtime_cache` 字段。详见 `DEVELOPMENT_MANUAL.md` §5.2–5.3、§10.6b 与本文 §10.7。 |
+| **2026-04-20**（更新 6） | **前后时标接入**：支持 `schemes[].dbtype`（`-1` 前时标、`0` 后时标），Web 侧栏只读展示当前时标模式（按 `time_type + step_size` 精确匹配）。**前时标修复**：补齐“读窗平移 + 标签回拨”，修复末端实测漏读引发的尾点复制问题。详见 `DEVELOPMENT_MANUAL.md` §5、§5.5 与本文 §10.8。 |
 
 ---
 

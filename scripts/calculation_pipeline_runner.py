@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -34,16 +35,21 @@ from hydro_engine.io.calculation_app_data_builder import (
 )
 from hydro_engine.io.calculation_app_data_loader import (
     build_times,
+    clip_station_dataframe_rows_before_forecast_start,
+    collect_all_station_ids_for_calculation,
     collect_observed_flow_station_ids,
     collect_rain_station_ids,
     load_rain_flow_for_calculation,
     read_config,
     read_jdbc_daydb_normalize_time_to_midnight_from_path,
+    station_observation_query_end_realtime,
 )
 from hydro_engine.io.calculation_app_data_processors import (
     apply_loaded_data_processors,
     standardize_loaded_inputs,
 )
+from hydro_engine.forecast.catchment_forecast_rainfall import CatchmentForecastRainfall
+from hydro_engine.forecast.scenario_forcing import load_catchment_forecast_rainfall_map_from_csv
 from hydro_engine.io.json_config import (
     apply_realtime_forecast_observed_meteorology_cutoff,
     flatten_stations_catalog,
@@ -56,6 +62,15 @@ from calculation_app_common import write_temp_config_with_periods
 
 
 OnLog = Optional[Callable[[str], None]]
+
+
+def _is_unified_db_station_source(jdbc_config_path: str, rain_csv: str, flow_csv: str) -> bool:
+    """雨量/流量/气温等是否来自同一库表（可一次 IN 查询）。"""
+    jc = str(jdbc_config_path or "").strip()
+    if jc and Path(jc).is_file():
+        return True
+    rp, fp = str(rain_csv or "").strip(), str(flow_csv or "").strip()
+    return bool(rp and rp == fp and Path(rp).suffix.lower() == ".json")
 
 
 def _read_station_catalog_names(config_path: str, time_type: str, step_size: int) -> Dict[str, str]:
@@ -132,6 +147,38 @@ def _read_catchment_catalog_names(config_path: str, time_type: str, step_size: i
     return out
 
 
+def _read_scheme_dbtype(config_path: str, time_type: str, step_size: int) -> int:
+    """
+    读取当前方案的前后时标配置：
+    -1: 前时标（默认）
+     0: 后时标
+
+    兼容：若配置缺失/异常，回退为 -1。
+    """
+    try:
+        data = read_config(config_path)
+    except Exception:
+        return -1
+    schemes = data.get("schemes")
+    if not isinstance(schemes, list):
+        return -1
+    tt = str(time_type).strip()
+    sz = int(step_size)
+    for s in schemes:
+        if not isinstance(s, dict):
+            continue
+        if str(s.get("time_type", "")).strip() != tt:
+            continue
+        if int(s.get("step_size", -999999)) != sz:
+            continue
+        raw = s.get("dbtype", -1)
+        try:
+            return int(raw)
+        except Exception:
+            return -1
+    return -1
+
+
 def _log(msg: str, on_log: OnLog) -> None:
     if on_log is None:
         return
@@ -149,6 +196,25 @@ def _parse_warmup_start(warmup_start: Any) -> datetime:
     return pd.to_datetime(warmup_start).to_pydatetime()
 
 
+def _load_catchment_scenario_rain_map(
+    csv_path: str,
+    default_catchment_ids: Optional[List[str]],
+    *,
+    on_log: OnLog,
+) -> Dict[str, CatchmentForecastRainfall]:
+    p = str(csv_path or "").strip()
+    if not p:
+        return {}
+    try:
+        return load_catchment_forecast_rainfall_map_from_csv(
+            p,
+            default_catchment_ids=default_catchment_ids,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _log(f"[forecast_scenario_rain] load failed: {exc}", on_log)
+        return {}
+
+
 def _make_timedelta_for_time_type(time_type: str, step_size: int) -> timedelta:
     """
     根据 time_type + step_size 得到引擎原生时间步长。
@@ -164,6 +230,46 @@ def _make_timedelta_for_time_type(time_type: str, step_size: int) -> timedelta:
         return timedelta(days=s)
     # parse_time_type 理论上已覆盖，这里兜底
     return timedelta(seconds=s)
+
+
+def _resolve_actual_forecast_start(
+    forecast_start_time_input: datetime,
+    *,
+    time_delta: timedelta,
+    dbtype: int,
+) -> datetime:
+    """
+    前后时标下的实际预报起点：
+    - dbtype == -1（前时标）：不平移
+    - 其余（后时标）：向后平移 1 个原生步长
+    """
+    if int(dbtype) == -1:
+        return forecast_start_time_input
+    return forecast_start_time_input + time_delta
+
+
+def _shift_station_df_time_label_for_dbtype(
+    df: pd.DataFrame,
+    *,
+    time_delta: timedelta,
+    dbtype: int,
+) -> pd.DataFrame:
+    """
+    前时标下将测站表时间标签统一回拨 1 个步长。
+
+    语义对齐 Java 版：dbtype=-1 时，库中落在“时段末”的值展示为“时段起”标签。
+    """
+    if df is None or df.empty:
+        return df
+    if int(dbtype) != -1:
+        return df
+    out = df.copy()
+    for col in ("TIME_DT", "TIME"):
+        if col not in out.columns:
+            continue
+        ts = pd.to_datetime(out[col], errors="coerce")
+        out[col] = ts - time_delta
+    return out
 
 
 def _infer_debug_table_columns(rows: List[Dict[str, Any]], *, max_cols: int = 40) -> List[str]:
@@ -338,6 +444,10 @@ def run_calculation_pipeline(
     historical_steps: int,
     forecast_steps: int,
     compute_forecast: bool,
+    forecast_scenario_rain_csv: str = "",
+    forecast_scenario_default_catchment_ids: Optional[List[str]] = None,
+    forecast_scenario_precipitation: str = "expected",
+    forecast_run_multiscenario: bool = False,
     on_log: OnLog = None,
 ) -> Tuple[Dict[str, Any], pd.DatetimeIndex, List[str], Dict[str, Any]]:
     """
@@ -350,8 +460,25 @@ def run_calculation_pipeline(
     # UI 输入字段语义：`预报起报时间`
     # 这里把它当作 forecast_start_time（预报起点），再往回推 warmup_start_time，
     # 以保证雨量站/测站序列的“读数时间轴”与用户选择的预报起点一致。
-    forecast_start_time = _parse_warmup_start(warmup_start)
+    forecast_start_time_input = _parse_warmup_start(warmup_start)
     td = _make_timedelta_for_time_type(str(time_type), int(step_size))
+    dbtype = _read_scheme_dbtype(
+        config_path=str(config_path),
+        time_type=str(time_type),
+        step_size=int(step_size),
+    )
+    forecast_start_time = _resolve_actual_forecast_start(
+        forecast_start_time_input,
+        time_delta=td,
+        dbtype=dbtype,
+    )
+    _log(
+        "[time] dbtype "
+        f"dbtype={dbtype} "
+        f"input_forecast_start={forecast_start_time_input.isoformat()} "
+        f"actual_forecast_start={forecast_start_time.isoformat()}",
+        on_log,
+    )
     # 嵌套时间轴：预热总长 W 自 T0 向历史回溯；总预热步数不再与 C、H 相加。
     pre_steps = int(warmup_steps)
     t0 = forecast_start_time - td * pre_steps  # warmup_start_time
@@ -389,22 +516,101 @@ def run_calculation_pipeline(
         count=int(time_context.step_count),
     )
 
-    # 2) 读数：收集需要的测站 id
+    # 2) 读数：收集测站 id（雨/PET/气温绑定 + 节点流量/入流）
     rain_senids = sorted(collect_rain_station_ids(binding_specs))
     flow_senids = sorted(collect_observed_flow_station_ids(scheme))
-    _log(f"[data] rain_senids={len(rain_senids)} flow_senids={len(flow_senids)}", on_log)
+    all_station_senids = collect_all_station_ids_for_calculation(binding_specs, scheme)
+    unified_for_load: Optional[List[str]] = None
+    if _is_unified_db_station_source(str(jdbc_config_path or ""), str(rain_csv or ""), str(flow_csv or "")):
+        unified_for_load = all_station_senids
+    _log(
+        f"[data] station_senids binding_meteo={len(rain_senids)} flow_nodes={len(flow_senids)} "
+        f"union_all={len(all_station_senids)} unified_query={bool(unified_for_load)}",
+        on_log,
+    )
 
-    # 3) 读取 rain/flow
+    read_time_start = time_context.warmup_start_time
+    read_time_end = time_context.end_time
+    station_obs_end = None
+    if str(forecast_mode).strip().lower() == "realtime_forecast":
+        station_obs_end = station_observation_query_end_realtime(time_context)
+    if int(dbtype) == -1:
+        # 前时标：读数窗口整体前移 1 步（读取“后置标签”数据），随后再统一回拨标签。
+        # 这可避免末端少一条导致 interp 复制前值。
+        read_time_start = read_time_start + time_context.time_delta
+        read_time_end = read_time_end + time_context.time_delta
+        if station_obs_end is not None:
+            station_obs_end = station_obs_end + time_context.time_delta
+    if station_obs_end is not None:
+        _log(
+            "[data] realtime_forecast: station table t_end capped at "
+            f"{station_obs_end.isoformat()} (all types: rain/flow/temp)",
+            on_log,
+        )
+    _log(
+        "[data] station read window "
+        f"start={read_time_start.isoformat()} end={read_time_end.isoformat()} dbtype={dbtype}",
+        on_log,
+    )
+
+    # 3) 读取测站表（单库源：一次 IN；双 CSV：各一次，共用 query_end）
     rain_df, flow_df, jdbc_warns = load_rain_flow_for_calculation(
         jdbc_config_path=str(jdbc_config_path or ""),
         rain_csv=str(rain_csv or ""),
         flow_csv=str(flow_csv or ""),
-        time_start=time_context.warmup_start_time,
-        time_end=time_context.end_time,
+        time_start=read_time_start,
+        time_end=read_time_end,
         rain_senids=rain_senids,
         flow_senids=flow_senids,
         time_type=str(time_type),
+        station_table_query_end=station_obs_end,
+        unified_station_senids=unified_for_load,
     )
+    # 前时标：测站数据时间标签回拨 1 步；后时标保持原样。
+    # 单库源路径下 rain_df/flow_df 可能是同一对象，避免重复回拨。
+    if flow_df is rain_df:
+        shifted = _shift_station_df_time_label_for_dbtype(
+            rain_df,
+            time_delta=time_context.time_delta,
+            dbtype=dbtype,
+        )
+        rain_df = shifted
+        flow_df = shifted
+    else:
+        rain_df = _shift_station_df_time_label_for_dbtype(
+            rain_df,
+            time_delta=time_context.time_delta,
+            dbtype=dbtype,
+        )
+        flow_df = _shift_station_df_time_label_for_dbtype(
+            flow_df,
+            time_delta=time_context.time_delta,
+            dbtype=dbtype,
+        )
+    if int(dbtype) == -1:
+        _log(
+            f"[time] dbtype=-1: station dataframe labels shifted by -{time_context.time_delta}",
+            on_log,
+        )
+
+    if station_obs_end is not None:
+        fs_t = time_context.forecast_start_time
+        flow_ref = flow_df
+        rain_df, dr = clip_station_dataframe_rows_before_forecast_start(rain_df, forecast_start=fs_t)
+        if dr:
+            _log(
+                f"[data] realtime_forecast: clipped {dr} station rows at/after forecast_start (CSV/file safety)",
+                on_log,
+            )
+        if flow_ref is not rain_df:
+            flow_df, df_ = clip_station_dataframe_rows_before_forecast_start(flow_ref, forecast_start=fs_t)
+            if df_:
+                _log(
+                    f"[data] realtime_forecast: clipped {df_} flow-file rows at/after forecast_start",
+                    on_log,
+                )
+        else:
+            flow_df = rain_df
 
     if str(time_type).strip().lower() == "day":
         _log(
@@ -474,6 +680,18 @@ def run_calculation_pipeline(
         times_len=len(times),
     )
     warns.extend(rain_warns or [])
+
+    scenario_rain_map = _load_catchment_scenario_rain_map(
+        forecast_scenario_rain_csv,
+        forecast_scenario_default_catchment_ids,
+        on_log=on_log,
+    )
+    if scenario_rain_map:
+        _log(
+            f"[forecast_scenario_rain] loaded catchments={sorted(scenario_rain_map.keys())} "
+            f"scenario={forecast_scenario_precipitation!r} multiscenario={forecast_run_multiscenario}",
+            on_log,
+        )
 
     # 8) aux：测站序列
     station_precip, station_pet, station_temp = _build_station_series_maps(
@@ -549,6 +767,7 @@ def run_calculation_pipeline(
 
     aux_base: Dict[str, Any] = {
         "time_type": str(time_context.time_type.value),
+        "dbtype": int(dbtype),
         "forecast_start_idx": _compute_forecast_start_idx(time_context),
         "node_observed_inflows": node_observed_inflows,
         "node_observed_outflows": node_observed_outflows,
@@ -573,6 +792,9 @@ def run_calculation_pipeline(
         "scheme": scheme,
         "warns": warns,
         "aux_base": aux_base,
+        "catchment_scenario_rainfall": scenario_rain_map,
+        "forecast_scenario_precipitation": str(forecast_scenario_precipitation or "expected"),
+        "forecast_run_multiscenario": bool(forecast_run_multiscenario),
     }
 
     # 12) 输出
@@ -597,6 +819,9 @@ def run_calculation_pipeline(
             observed_flows=observed_flows,
             forecast_mode=forecast_mode,
             catchment_workers=catchment_workers,
+            catchment_scenario_rainfall=scenario_rain_map or None,
+            scenario_precipitation=str(forecast_scenario_precipitation or "expected"),
+            forecast_multiscenario=bool(forecast_run_multiscenario),
         )
     aux = dict(aux_base)
     aux["_runtime_cache"] = runtime_cache
@@ -610,6 +835,9 @@ def run_forecast_from_runtime_cache(
     catchment_workers: Optional[int],
     time_type: str,
     step_size: int,
+    catchment_scenario_rainfall: Optional[Dict[str, CatchmentForecastRainfall]] = None,
+    scenario_precipitation: Optional[str] = None,
+    forecast_multiscenario: Optional[bool] = None,
     on_log: OnLog = None,
 ) -> Tuple[Dict[str, Any], pd.DatetimeIndex, List[str], Dict[str, Any]]:
     """
@@ -629,6 +857,20 @@ def run_forecast_from_runtime_cache(
     warns = list(runtime_cache.get("warns") or [])
     aux_base = dict(runtime_cache.get("aux_base") or {})
 
+    scen_map = catchment_scenario_rainfall
+    if scen_map is None:
+        scen_map = runtime_cache.get("catchment_scenario_rainfall") or {}
+    scen_precip = (
+        str(scenario_precipitation).strip()
+        if scenario_precipitation is not None
+        else str(runtime_cache.get("forecast_scenario_precipitation") or "expected")
+    )
+    scen_multi = (
+        bool(forecast_multiscenario)
+        if forecast_multiscenario is not None
+        else bool(runtime_cache.get("forecast_run_multiscenario"))
+    )
+
     out = run_calculation_from_json(
         config_path=config_used_path,
         station_packages=station_packages,
@@ -638,6 +880,9 @@ def run_forecast_from_runtime_cache(
         observed_flows=observed_flows,
         forecast_mode=forecast_mode,
         catchment_workers=catchment_workers,
+        catchment_scenario_rainfall=scen_map or None,
+        scenario_precipitation=scen_precip,
+        forecast_multiscenario=scen_multi,
     )
 
     aux = dict(aux_base)

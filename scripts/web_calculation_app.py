@@ -129,8 +129,17 @@ def _append_log(msg: str) -> None:
 
 
 def _cache_key_from_params(p: Dict[str, Any]) -> Tuple[Any, ...]:
+    cfg_path = str(p["config_path"] or "").strip()
+    cfg_mtime_ns = 0
+    if cfg_path:
+        try:
+            cfg_mtime_ns = Path(cfg_path).stat().st_mtime_ns
+        except OSError:
+            cfg_mtime_ns = 0
+    default_ids = p.get("forecast_scenario_default_catchment_ids") or ()
     return (
         p["config_path"],
+        cfg_mtime_ns,
         p["jdbc_config_path"],
         p["rain_csv"],
         p["flow_csv"],
@@ -141,7 +150,14 @@ def _cache_key_from_params(p: Dict[str, Any]) -> Tuple[Any, ...]:
         p["correction_steps"],
         p["historical_steps"],
         p["forecast_steps"],
+        str(p.get("forecast_scenario_rain_csv") or "").strip(),
+        tuple(default_ids) if isinstance(default_ids, (list, tuple)) else (default_ids,),
     )
+
+
+def _parse_forecast_default_catchment_ids(raw: str) -> Optional[List[str]]:
+    parts = [p.strip() for p in str(raw or "").split(",") if p.strip()]
+    return parts or None
 
 
 def _gather_params(side: Dict[str, Any]) -> Dict[str, Any]:
@@ -159,6 +175,12 @@ def _gather_params(side: Dict[str, Any]) -> Dict[str, Any]:
         "correction_steps": int(side["correction_steps"]),
         "historical_steps": int(side["historical_steps"]),
         "forecast_steps": max(1, int(side["forecast_steps"])),
+        "forecast_scenario_rain_csv": str(side.get("forecast_scenario_rain_csv") or "").strip(),
+        "forecast_scenario_default_catchment_ids": _parse_forecast_default_catchment_ids(
+            str(side.get("forecast_scenario_default_catchment_ids") or "")
+        ),
+        "forecast_scenario_precipitation": str(side.get("forecast_scenario_precipitation") or "expected").strip(),
+        "forecast_run_multiscenario": bool(side.get("forecast_run_multiscenario")),
     }
 
 
@@ -518,6 +540,34 @@ def _load_best_scheme_for_time_type(config_path: str, time_type: str) -> Optiona
     return min(candidates, key=lambda x: int(x.get("step_size", 999999)))
 
 
+def _load_scheme_for_time_scale(config_path: str, time_type: str, step_size: int) -> Optional[Dict[str, Any]]:
+    """
+    按 time_type + step_size 精确匹配 scheme。
+    """
+    cfg = str(config_path or "").strip()
+    tt = str(time_type or "").strip()
+    try:
+        sz = int(step_size)
+    except Exception:
+        return None
+    if not cfg or not Path(cfg).is_file():
+        return None
+    try:
+        data = json.loads(Path(cfg).read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    for s in data.get("schemes") or []:
+        if str(s.get("time_type") or "").strip() != tt:
+            continue
+        try:
+            if int(s.get("step_size", -999999)) != sz:
+                continue
+        except Exception:
+            continue
+        return s
+    return None
+
+
 def _scheme_time_axis_defaults(config_path: str, time_type: str) -> Dict[str, Any]:
     """
     返回：step_size、forecast_mode、warmup_steps、correction_steps、historical_steps、forecast_steps。
@@ -547,6 +597,24 @@ def _scheme_time_axis_defaults(config_path: str, time_type: str) -> Dict[str, An
     out["historical_steps"] = _get_axis_int("historical_display_period_steps", 0)
     out["forecast_steps"] = _get_axis_int("forecast_period_steps", 24)
     return out
+
+
+def _scheme_dbtype_mode_label(config_path: str, time_type: str, step_size: int) -> str:
+    """
+    只读展示当前时标模式：
+    - dbtype=-1: 前时标
+    - 其他值: 后时标
+    """
+    scheme = _load_scheme_for_time_scale(config_path, time_type, step_size)
+    if not scheme:
+        return "未匹配到当前 time_type+步长 方案（默认前时标）"
+    try:
+        dbtype = int(scheme.get("dbtype", -1))
+    except Exception:
+        dbtype = -1
+    if dbtype == -1:
+        return f"前时标（dbtype={dbtype}）"
+    return f"后时标（dbtype={dbtype}）"
 
 
 def _sync_time_axis_from_scheme() -> None:
@@ -631,6 +699,13 @@ def main() -> None:
             on_change=_sync_time_axis_from_scheme,
         )
         step_size = st.number_input("步长", min_value=1, value=int(st.session_state["ui_step_size"]), step=1, key="ui_step_size")
+        dbtype_mode_label = _scheme_dbtype_mode_label(str(config_path), str(time_type), int(step_size))
+        st.text_input(
+            "当前时标模式（只读展示）",
+            value=dbtype_mode_label,
+            disabled=True,
+            help="按当前 time_type + 步长精确匹配方案读取 dbtype。",
+        )
         warmup_steps = st.number_input(
             "总预热步数",
             min_value=0,
@@ -659,6 +734,32 @@ def main() -> None:
         forecast_steps = st.number_input(
             "预报步数", min_value=1, value=int(st.session_state["ui_forecast_steps"]), step=1, key="ui_forecast_steps"
         )
+        st.caption("预报面雨情景 CSV（可选）：列 time / expected / upper / lower；可选 pet；可选 catchment_id。")
+        forecast_scenario_rain_csv = st.text_input(
+            "预报面雨情景 CSV 路径",
+            value=str(st.session_state.get("ui_forecast_scenario_rain_csv", "") or ""),
+            key="ui_forecast_scenario_rain_csv",
+            help="与引擎 forecast_start 起报对齐；步长须与方案一致。无 catchment_id 列时需填下方子流域 id（唯一）。",
+        )
+        forecast_scenario_default_catchment_ids = st.text_input(
+            "单表时的子流域 ID（逗号分隔）",
+            value=str(st.session_state.get("ui_forecast_scenario_default_cids", "") or ""),
+            key="ui_forecast_scenario_default_cids",
+        )
+        _scen_opts = ["expected", "upper", "lower"]
+        _scen_cur = str(st.session_state.get("ui_forecast_scenario_precip", "expected") or "expected").lower()
+        forecast_scenario_precipitation = st.selectbox(
+            "主结果降水情景",
+            options=_scen_opts,
+            index=_scen_opts.index(_scen_cur) if _scen_cur in _scen_opts else 0,
+            key="ui_forecast_scenario_precip",
+        )
+        forecast_run_multiscenario = st.checkbox(
+            "同时计算三情景（expected/upper/lower）",
+            value=bool(st.session_state.get("ui_forecast_run_multiscenario", False)),
+            key="ui_forecast_run_multiscenario",
+            help="勾选后引擎跑三遍，主图表仍用「主结果降水情景」；完整结果在输出字典 multiscenario_engine_outputs。",
+        )
 
         side = {
             "config_path": config_path,
@@ -674,6 +775,10 @@ def main() -> None:
             "correction_steps": correction_steps,
             "historical_steps": historical_steps,
             "forecast_steps": forecast_steps,
+            "forecast_scenario_rain_csv": forecast_scenario_rain_csv,
+            "forecast_scenario_default_catchment_ids": forecast_scenario_default_catchment_ids,
+            "forecast_scenario_precipitation": forecast_scenario_precipitation,
+            "forecast_run_multiscenario": forecast_run_multiscenario,
         }
 
         col_a, col_b = st.columns(2)
@@ -717,6 +822,10 @@ def main() -> None:
                     historical_steps=params["historical_steps"],
                     forecast_steps=params["forecast_steps"],
                     compute_forecast=False,
+                    forecast_scenario_rain_csv=params["forecast_scenario_rain_csv"],
+                    forecast_scenario_default_catchment_ids=params["forecast_scenario_default_catchment_ids"],
+                    forecast_scenario_precipitation=params["forecast_scenario_precipitation"],
+                    forecast_run_multiscenario=params["forecast_run_multiscenario"],
                     on_log=_append_log,
                 )
             st.session_state.hydro_output = out
@@ -750,6 +859,8 @@ def main() -> None:
                         catchment_workers=params["catchment_workers"],
                         time_type=params["time_type"],
                         step_size=params["step_size"],
+                        scenario_precipitation=params["forecast_scenario_precipitation"],
+                        forecast_multiscenario=params["forecast_run_multiscenario"],
                         on_log=_append_log,
                     )
                 else:
@@ -768,6 +879,10 @@ def main() -> None:
                         historical_steps=params["historical_steps"],
                         forecast_steps=params["forecast_steps"],
                         compute_forecast=True,
+                        forecast_scenario_rain_csv=params["forecast_scenario_rain_csv"],
+                        forecast_scenario_default_catchment_ids=params["forecast_scenario_default_catchment_ids"],
+                        forecast_scenario_precipitation=params["forecast_scenario_precipitation"],
+                        forecast_run_multiscenario=params["forecast_run_multiscenario"],
                         on_log=_append_log,
                     )
                     st.session_state.hydro_runtime_cache = aux.get("_runtime_cache")
