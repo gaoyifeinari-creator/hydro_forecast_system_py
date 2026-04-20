@@ -13,6 +13,7 @@ Thin wrapper for legacy imports.
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -91,8 +92,59 @@ def write_temp_config_with_periods(
         "forecast_period_steps": int(forecast_steps),
     }
 
-    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
-    json.dump(data, tmp, ensure_ascii=False, indent=2)
-    tmp.close()
-    return tmp.name
+    # 使用“可复用命名 + 周期清理”，避免长期任务每次生成随机临时文件导致磁盘累积。
+    cache_dir = Path(tempfile.gettempdir()) / "hydro_project_cfg_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    source = Path(config_path).resolve()
+    source_mtime = 0
+    try:
+        source_mtime = source.stat().st_mtime_ns
+    except OSError:
+        source_mtime = 0
+    key = (
+        f"{source}|{source_mtime}|{time_type}|{int(step_size)}|"
+        f"{int(warmup_steps)}|{int(correction_steps)}|{int(historical_steps)}|{int(forecast_steps)}"
+    )
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:20]
+    out_path = cache_dir / f"calc_cfg_{digest}.json"
+    tmp_path = out_path.with_suffix(".tmp")
+
+    tmp_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    tmp_path.replace(out_path)
+
+    # 惰性清理：删除 7 天前文件；并限制总数，保留最新 256 个。
+    try:
+        keep = 256
+        ttl_seconds = 7 * 24 * 3600
+        now = datetime.now().timestamp()
+        files = sorted(
+            cache_dir.glob("calc_cfg_*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for p in files:
+            try:
+                if now - p.stat().st_mtime > ttl_seconds:
+                    p.unlink(missing_ok=True)
+            except OSError:
+                pass
+        files = sorted(
+            cache_dir.glob("calc_cfg_*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for p in files[keep:]:
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except Exception:
+        # 清理失败不影响主流程
+        pass
+
+    return str(out_path)
 

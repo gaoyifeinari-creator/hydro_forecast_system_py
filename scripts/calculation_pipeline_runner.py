@@ -49,6 +49,13 @@ from hydro_engine.io.calculation_app_data_processors import (
     standardize_loaded_inputs,
 )
 from hydro_engine.forecast.catchment_forecast_rainfall import CatchmentForecastRainfall
+from hydro_engine.forecast.multisource_areal_rainfall import (
+    CompileRequest,
+    MultiSourceArealRainfallCompiler,
+    SqlAlchemyForecastRainRepository,
+    load_forecast_db_config_from_jdbc_json,
+    parse_forecast_rain_config_from_scheme,
+)
 from hydro_engine.forecast.scenario_forcing import load_catchment_forecast_rainfall_map_from_csv
 from hydro_engine.io.json_config import (
     apply_realtime_forecast_observed_meteorology_cutoff,
@@ -215,6 +222,105 @@ def _load_catchment_scenario_rain_map(
         return {}
 
 
+def _load_forecast_rain_from_scheme_db(
+    *,
+    config_path: str,
+    jdbc_config_path: str,
+    time_type: str,
+    step_size: int,
+    time_context: Any,
+    dbtype: int,
+    on_log: OnLog,
+) -> Dict[str, CatchmentForecastRainfall]:
+    """
+    从 scheme.future_rainfall 读取配置，查库整编并生成 catchment 级预报雨量情景。
+    """
+    try:
+        data = read_config(config_path)
+        schemes = data.get("schemes") or []
+        target = None
+        for s in schemes:
+            if not isinstance(s, dict):
+                continue
+            if str(s.get("time_type", "")).strip() != str(time_type).strip():
+                continue
+            if int(s.get("step_size", -999999)) != int(step_size):
+                continue
+            target = s
+            break
+        if not isinstance(target, dict):
+            return {}
+
+        future_cfg = target.get("future_rainfall")
+        if not isinstance(future_cfg, dict):
+            return {}
+
+        bundle = parse_forecast_rain_config_from_scheme(target)
+        reg_ids = [str((c or {}).get("id", "")).strip() for c in (target.get("catchments") or []) if str((c or {}).get("id", "")).strip()]
+        if not reg_ids:
+            _log("[forecast_scenario_rain] scheme has no catchments, skip db forecast rain", on_log)
+            return {}
+
+        db_cfg = dict(future_cfg.get("db") or {})
+        service_name = str(db_cfg.get("service_name", db_cfg.get("service", "")) or "").strip() or None
+        table_name = str(db_cfg.get("table_name", "WEA_GFSFORRAIN") or "WEA_GFSFORRAIN").strip()
+        prefer_two_step_latest = bool(db_cfg.get("prefer_two_step_latest", True))
+
+        repo_cfg = load_forecast_db_config_from_jdbc_json(
+            jdbc_config_path,
+            service_name=service_name,
+            table_name=table_name,
+            prefer_two_step_latest=prefer_two_step_latest,
+        )
+        repo = SqlAlchemyForecastRainRepository(repo_cfg)
+        compiler = MultiSourceArealRainfallCompiler(repo)
+        req = CompileRequest(
+            forecast_begin=time_context.forecast_start_time,
+            forecast_end=time_context.end_time,
+            target_time_type=str(time_type),
+            target_time_step=int(step_size),
+            # WEA_GFSFORRAIN 源数据是前时标；按当前方案 dbtype 做一次锚点转换（前->后），仅在整编阶段执行。
+            dbtype=int(dbtype),
+            reg_ids=reg_ids,
+            source_config=bundle.selected_source,
+            distribution_params=bundle.distribution_params,
+            fluctuate_range=float(future_cfg.get("fluctuate_range", 0.0) or 0.0),
+            use_min_max_from_db=bool(future_cfg.get("use_min_max_from_db", True)),
+            latest_ftime_lookback_days=int(future_cfg.get("latest_ftime_lookback_days", 6) or 6),
+        )
+        points = compiler.compile(req)
+        if not points:
+            _log("[forecast_scenario_rain] db forecast rain compiled 0 points", on_log)
+            return {}
+
+        grouped: Dict[str, List[Any]] = {}
+        for p in points:
+            grouped.setdefault(str(p.reg_id), []).append(p)
+
+        out: Dict[str, CatchmentForecastRainfall] = {}
+        for cid, arr in grouped.items():
+            arr_sorted = sorted(arr, key=lambda x: x.time)
+            t_index = pd.DatetimeIndex([x.time for x in arr_sorted])
+            out[cid] = CatchmentForecastRainfall.from_aligned_arrays(
+                catchment_id=cid,
+                time_index=t_index,
+                expected=[float(x.value) for x in arr_sorted],
+                upper=[float(x.max_value) for x in arr_sorted],
+                lower=[float(x.min_value) for x in arr_sorted],
+                time_step=time_context.time_delta,
+            )
+
+        _log(
+            f"[forecast_scenario_rain] db compiled catchments={len(out)} "
+            f"source={bundle.selected_source.name}",
+            on_log,
+        )
+        return out
+    except Exception as exc:  # noqa: BLE001
+        _log(f"[forecast_scenario_rain] db compile failed: {exc}", on_log)
+        return {}
+
+
 def _make_timedelta_for_time_type(time_type: str, step_size: int) -> timedelta:
     """
     根据 time_type + step_size 得到引擎原生时间步长。
@@ -239,13 +345,13 @@ def _resolve_actual_forecast_start(
     dbtype: int,
 ) -> datetime:
     """
-    前后时标下的实际预报起点：
-    - dbtype == -1（前时标）：不平移
-    - 其余（后时标）：向后平移 1 个原生步长
+    实际预报起点：
+    - 与 UI/配置输入保持一致，不再按 dbtype 做额外平移。
+    - 前后时标差异通过“读数窗口/标签/整编锚点”处理，不改起报时刻本身。
     """
-    if int(dbtype) == -1:
-        return forecast_start_time_input
-    return forecast_start_time_input + time_delta
+    _ = time_delta
+    _ = dbtype
+    return forecast_start_time_input
 
 
 def _shift_station_df_time_label_for_dbtype(
@@ -320,6 +426,86 @@ def _build_station_series_maps(
                 continue
             target[str(sid)] = [float(x) for x in ts.values]
     return station_precip, station_pet, station_temp
+
+
+def _overlay_forecast_rain_to_catchment_series(
+    *,
+    base_series: Dict[str, List[float]],
+    scenario_rain_map: Dict[str, CatchmentForecastRainfall],
+    times: pd.DatetimeIndex,
+    forecast_start_idx: int,
+    precipitation_field: str = "expected",
+) -> Dict[str, List[float]]:
+    """
+    用预报面雨覆盖 UI 展示用 catchment_rain 的预报段，历史段保留实测聚合。
+    """
+    out = {str(k): list(v) for k, v in (base_series or {}).items()}
+    if not scenario_rain_map:
+        return out
+    fs = max(0, int(forecast_start_idx))
+    if fs >= len(times):
+        return out
+
+    for cid, scen in (scenario_rain_map or {}).items():
+        arr = list(out.get(str(cid), [0.0] * len(times)))
+        if len(arr) < len(times):
+            arr = arr + [0.0] * (len(times) - len(arr))
+        vals = scen.expected
+        if str(precipitation_field).strip().lower() in ("upper", "max"):
+            vals = scen.upper
+        elif str(precipitation_field).strip().lower() in ("lower", "min"):
+            vals = scen.lower
+
+        by_time = {pd.Timestamp(t): float(v) for t, v in zip(scen.time_index, vals)}
+        for i in range(fs, len(times)):
+            t = pd.Timestamp(times[i])
+            if t in by_time:
+                arr[i] = float(by_time[t])
+        out[str(cid)] = arr
+    return out
+
+
+def _align_scenario_rainfall_to_engine_grid(
+    *,
+    scenario_rain_map: Dict[str, CatchmentForecastRainfall],
+    forecast_times: pd.DatetimeIndex,
+    time_step: timedelta,
+    precipitation_field: str = "expected",
+    dbtype: int = -1,
+) -> Dict[str, CatchmentForecastRainfall]:
+    """
+    将情景雨量对齐到引擎预报网格（首时刻必须等于 forecast_start_time）。
+    缺失时刻补 0，避免因后时标序列首时刻 +1 步导致注入失败。
+    """
+    if not scenario_rain_map:
+        return {}
+    out: Dict[str, CatchmentForecastRainfall] = {}
+    for cid, scen in (scenario_rain_map or {}).items():
+        vals = scen.expected
+        if str(precipitation_field).strip().lower() in ("upper", "max"):
+            vals = scen.upper
+        elif str(precipitation_field).strip().lower() in ("lower", "min"):
+            vals = scen.lower
+        by_time = {pd.Timestamp(t): float(v) for t, v in zip(scen.time_index, vals)}
+        aligned_expected: List[float] = []
+        aligned_upper: List[float] = []
+        aligned_lower: List[float] = []
+        by_u = {pd.Timestamp(t): float(v) for t, v in zip(scen.time_index, scen.upper)}
+        by_l = {pd.Timestamp(t): float(v) for t, v in zip(scen.time_index, scen.lower)}
+        for t in forecast_times:
+            ts = pd.Timestamp(t)
+            aligned_expected.append(float(by_time.get(ts, 0.0)))
+            aligned_upper.append(float(by_u.get(ts, 0.0)))
+            aligned_lower.append(float(by_l.get(ts, 0.0)))
+        out[str(cid)] = CatchmentForecastRainfall.from_aligned_arrays(
+            catchment_id=str(cid),
+            time_index=pd.DatetimeIndex(forecast_times),
+            expected=aligned_expected,
+            upper=aligned_upper,
+            lower=aligned_lower,
+            time_step=time_step,
+        )
+    return out
 
 
 def _apply_daydb_rain_fallback_and_diagnostics(
@@ -686,12 +872,39 @@ def run_calculation_pipeline(
         forecast_scenario_default_catchment_ids,
         on_log=on_log,
     )
+    if not scenario_rain_map:
+        scenario_rain_map = _load_forecast_rain_from_scheme_db(
+            config_path=config_used_path,
+            jdbc_config_path=str(jdbc_config_path or ""),
+            time_type=str(time_type),
+            step_size=int(step_size),
+            time_context=time_context,
+            dbtype=int(dbtype),
+            on_log=on_log,
+        )
     if scenario_rain_map:
         _log(
             f"[forecast_scenario_rain] loaded catchments={sorted(scenario_rain_map.keys())} "
             f"scenario={forecast_scenario_precipitation!r} multiscenario={forecast_run_multiscenario}",
             on_log,
         )
+
+    fs_idx = _compute_forecast_start_idx(time_context)
+    forecast_times = pd.DatetimeIndex(times[fs_idx:])
+    scenario_rain_map = _align_scenario_rainfall_to_engine_grid(
+        scenario_rain_map=scenario_rain_map,
+        forecast_times=forecast_times,
+        time_step=time_context.time_delta,
+        precipitation_field=str(forecast_scenario_precipitation or "expected"),
+        dbtype=int(dbtype),
+    )
+    catchment_rain_ui = _overlay_forecast_rain_to_catchment_series(
+        base_series=catchment_rain,
+        scenario_rain_map=scenario_rain_map,
+        times=times,
+        forecast_start_idx=fs_idx,
+        precipitation_field=str(forecast_scenario_precipitation or "expected"),
+    )
 
     # 8) aux：测站序列
     station_precip, station_pet, station_temp = _build_station_series_maps(
@@ -768,7 +981,7 @@ def run_calculation_pipeline(
     aux_base: Dict[str, Any] = {
         "time_type": str(time_context.time_type.value),
         "dbtype": int(dbtype),
-        "forecast_start_idx": _compute_forecast_start_idx(time_context),
+        "forecast_start_idx": fs_idx,
         "node_observed_inflows": node_observed_inflows,
         "node_observed_outflows": node_observed_outflows,
         "node_name_map": node_name_map,
@@ -778,7 +991,7 @@ def run_calculation_pipeline(
         "station_pet": station_pet,
         "station_temp": station_temp,
         "station_flow": station_flow,
-        "catchment_rain": catchment_rain,
+        "catchment_rain": catchment_rain_ui,
     }
 
     runtime_cache: Dict[str, Any] = {
@@ -870,6 +1083,14 @@ def run_forecast_from_runtime_cache(
         if forecast_multiscenario is not None
         else bool(runtime_cache.get("forecast_run_multiscenario"))
     )
+    fs_idx = _compute_forecast_start_idx(time_context)
+    scen_map = _align_scenario_rainfall_to_engine_grid(
+        scenario_rain_map=scen_map or {},
+        forecast_times=pd.DatetimeIndex(times[fs_idx:]),
+        time_step=time_context.time_delta,
+        precipitation_field=scen_precip,
+        dbtype=int(aux_base.get("dbtype", -1)),
+    )
 
     out = run_calculation_from_json(
         config_path=config_used_path,
@@ -913,6 +1134,13 @@ def run_forecast_from_runtime_cache(
             sp, spt, st = _build_station_series_maps(station_packages=station_packages)
             cr, _ = build_catchment_precip_series_from_station_packages(
                 bs, station_packages, len(times)
+            )
+            cr = _overlay_forecast_rain_to_catchment_series(
+                base_series=cr,
+                scenario_rain_map=scen_map or {},
+                times=times,
+                forecast_start_idx=fs_idx,
+                precipitation_field=scen_precip,
             )
             aux["station_precip"] = sp
             aux["station_pet"] = spt

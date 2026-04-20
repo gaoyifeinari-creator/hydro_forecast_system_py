@@ -287,9 +287,9 @@ from hydro_engine import ForecastSession, ForecastingScheme, CalculationEngine, 
 
 1. 解析时间轴并生成 `times`
 2. 收集测站 ID：**`collect_all_station_ids_for_calculation`**（雨/PET/气温绑定 + 节点流量/入流）；兼容路径仍保留 `collect_rain_station_ids` / `collect_observed_flow_station_ids` 分项日志。
-3. 解析当前方案 `dbtype`（`-1` 前时标，`0` 后时标）并计算实际预报起点：
-   - 前时标：`actual_forecast_start = input_forecast_start`
-   - 后时标：`actual_forecast_start = input_forecast_start + 1*time_delta`
+3. 解析当前方案 `dbtype`（`-1` 前时标，`0` 后时标）：
+   - 预报起报时刻保持与 UI/配置输入一致（不再因 `dbtype` 额外平移）
+   - 前后时标差异通过“读窗/标签/整编锚点”链路处理
    然后据此回推 `warmup_start_time`。
 3. **`load_rain_flow_for_calculation`**：若 `forecast_mode=realtime_forecast`，则 **`station_table_query_end = station_observation_query_end_realtime(time_context)`**，使库表 **`t_end`** 不包含 T0 及以后（雨、流、温同一上界）；JDBC 或「雨/流同一 JSON 库」时传入 **`unified_station_senids=collect_all...`**，**一次 `IN` 查询** 拉全站。双 CSV 时仍两次读文件，但 **`time_end` 同为截断上界**；随后对 `rain_df` / `flow_df`（若非同一引用则分别）调用 **`clip_station_dataframe_rows_before_forecast_start`**，去掉 **≥ T0** 行。
 4. **前时标读数窗口平移与标签回拨**（`dbtype=-1`）：
@@ -315,6 +315,10 @@ from hydro_engine import ForecastSession, ForecastingScheme, CalculationEngine, 
   - `dbtype=0`：后时标
 - 兼容说明：当前实现默认读取小写 `dbtype`；未配置时按前时标处理。
 - Web 侧栏会以“当前时标模式（只读展示）”显示匹配 `time_type + step_size` 的 `dbtype`。
+- 预报面雨特例（`WEA_GFSFORRAIN`）：
+  - 源表语义固定为前时标（`BTIME=t, TIMESPAN=1` 表示 `t~t+1` 累计雨量）
+  - 当方案为后时标时，仅在整编锚点阶段做一次“前时标 -> 后时标”映射
+  - 对齐/展示层不再做二次平移，避免前后错位一格。
 
 ### 5.1 新增处理层说明
 

@@ -36,3 +36,46 @@ daydb_daily_station: |
   FROM WDS.DAYDB
   WHERE TIME >= :t_start AND TIME <= :t_end AND SENID = :senid
   ORDER BY TIME
+
+# 预报面雨量（WEA_GFSFORRAIN）：
+# - 两步法（达梦兼容）：先查最新 FTIME，再查明细
+# - 子查询法：一次 SQL 取最新 FTIME 明细
+#
+# 字段约定：
+# REGID, SUBTYPE, TIMESPAN, FTIME, BTIME, AVERPRE, MINPRE, MAXPRE
+forecast_rain_latest_ftime: |
+  SELECT MAX(FTIME) AS FTIME
+  FROM WDS.WEA_GFSFORRAIN
+  WHERE FTIME >= :ftime_begin
+    AND FTIME < :ftime_end
+    AND SUBTYPE = :subtype
+    AND TIMESPAN = :timespan
+
+forecast_rain_latest_records_in: |
+  SELECT REGID, SUBTYPE, TIMESPAN, FTIME, BTIME, AVERPRE, MINPRE, MAXPRE
+  FROM WDS.WEA_GFSFORRAIN
+  WHERE REGID IN :regids
+    AND SUBTYPE = :subtype
+    AND TIMESPAN = :timespan
+    AND FTIME = :max_ftime
+    AND BTIME >= :read_begin
+    AND BTIME <= :read_end
+  ORDER BY REGID, BTIME
+
+forecast_rain_latest_records_subquery_in: |
+  SELECT REGID, SUBTYPE, TIMESPAN, FTIME, BTIME, AVERPRE, MINPRE, MAXPRE
+  FROM WDS.WEA_GFSFORRAIN
+  WHERE REGID IN :regids
+    AND SUBTYPE = :subtype
+    AND TIMESPAN = :timespan
+    AND FTIME = (
+      SELECT MAX(FTIME)
+      FROM WDS.WEA_GFSFORRAIN
+      WHERE FTIME >= :ftime_begin
+        AND FTIME < :ftime_end
+        AND SUBTYPE = :subtype
+        AND TIMESPAN = :timespan
+    )
+    AND BTIME >= :read_begin
+    AND BTIME <= :read_end
+  ORDER BY REGID, BTIME

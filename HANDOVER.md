@@ -262,7 +262,7 @@ python -m unittest discover -v
 **时间轴与读数链路对齐**
 
 - `run_calculation_pipeline` 中新增前后时标处理：
-  1. 先按 `dbtype` 计算实际预报起点（后时标 `+1 step`，前时标不偏移）
+  1. 预报起报时刻保持与输入一致（不再按 `dbtype` 额外平移）
   2. 再回推 `warmup_start_time`
 - 前时标下新增“读窗平移 + 标签回拨”组合处理（与旧系统语义一致）：
   - 读窗整体平移：`read_start/read_end/station_table_query_end += time_delta`
@@ -273,6 +273,30 @@ python -m unittest discover -v
 - 现象：前时标下最后一个实测值经常与前一个值相同。
 - 根因：仅做标签回拨、未做读窗平移，导致末端漏读后被 `interp` 复制前值。
 - 结果：补齐读窗平移后，末端实测值按数据库真实末条落时显示，不再“尾点复制”。
+
+### 10.9 预报面雨时标与配置对账（2026-04-20）
+
+**背景**
+
+- `WEA_GFSFORRAIN` 源表语义固定为前时标。
+- 若方案为后时标（`dbtype=0`），需要把源表“时段起点标签”映射到“时段终点标签”，但只能做一次。
+
+**本次修复**
+
+- 预报面雨整编链路按方案 `dbtype` 在锚点阶段完成一次时标映射。
+- 后续情景对齐/展示不再二次平移，避免“向前/向后多一格”。
+- 修正 `xinanjiang_cs` 联调过程中引入的临时补丁，确保同一规则在读取、整编、展示链路一致。
+
+**新增诊断脚本**
+
+- `scripts/diagnose_scheme_conversion.py`
+  - 对账 `HFSchemeConf.xml` 与 `forecastSchemeConf.json` 的：
+    - 子流域产流参数
+    - 初始状态
+    - 汇流参数
+    - 降雨站权重
+    - 蒸发月值
+  - 用于快速排除“参数转换误差导致退水偏差”的问题。
 
 ---
 
@@ -287,6 +311,7 @@ python -m unittest discover -v
 | **2026-04-03**（更新 4） | **实时预报 T0 气象**：抽出 `apply_realtime_forecast_observed_meteorology_cutoff`；Web pipeline 在 aux 前截断；`catchment_rain` 与测站序列改由 `station_packages` 派生；`runtime_cache` 增加 `binding_specs`；`run_forecast_from_runtime_cache` 计算后重写雨量相关 aux。详见 `DEVELOPMENT_MANUAL.md` §3.6、§3.8、§5 与本文 §10.6。 |
 | **2026-04-17**（更新 5） | **实时读库**：雨/流/温共用 `station_table_query_end`；`collect_all_station_ids_for_calculation` + `unified_station_senids` 同库 **一次 IN**；`collect_rain_station_ids` 含气温；`clip_station_dataframe_rows_before_forecast_start`。 **预报情景面雨**：`run_calculation_from_json` 关键字参数 + `scenario_forcing` + pipeline/Web 参数与 `runtime_cache` 字段。详见 `DEVELOPMENT_MANUAL.md` §5.2–5.3、§10.6b 与本文 §10.7。 |
 | **2026-04-20**（更新 6） | **前后时标接入**：支持 `schemes[].dbtype`（`-1` 前时标、`0` 后时标），Web 侧栏只读展示当前时标模式（按 `time_type + step_size` 精确匹配）。**前时标修复**：补齐“读窗平移 + 标签回拨”，修复末端实测漏读引发的尾点复制问题。详见 `DEVELOPMENT_MANUAL.md` §5、§5.5 与本文 §10.8。 |
+| **2026-04-20**（更新 7） | **预报面雨时标统一**：`WEA_GFSFORRAIN` 作为前时标源，后时标方案只在整编锚点阶段做一次映射，去除后续二次平移；修正“展示前后错一格”问题。新增 `scripts/diagnose_scheme_conversion.py` 对账 XML/JSON 参数一致性。 |
 
 ---
 

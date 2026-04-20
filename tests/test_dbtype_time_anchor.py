@@ -30,7 +30,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         )
         self.assertEqual(
             _resolve_actual_forecast_start(t0, time_delta=step, dbtype=0),
-            t0 + step,
+            t0,
         )
 
     def test_read_scheme_dbtype_from_config(self) -> None:

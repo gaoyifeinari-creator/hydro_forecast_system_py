@@ -6,8 +6,11 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from hydro_engine.core.context import ForecastTimeContext, TimeType
 from hydro_engine.core.forcing import ForcingData, ForcingKind
 from hydro_engine.core.timeseries import TimeSeries
+from hydro_engine.forecast.scenario_forcing import load_catchment_forecast_rainfall_map_from_csv
+from hydro_engine.io.calculation_app_data_loader import station_observation_query_end_realtime
 from hydro_engine.io.json_config import (
     flatten_stations_catalog,
     load_scheme_from_json,
@@ -19,6 +22,23 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestJsonConfigPipeline(unittest.TestCase):
+    def test_station_observation_query_end_realtime(self) -> None:
+        ws = datetime(2026, 1, 1, 0, 0, 0)
+        tc = ForecastTimeContext.from_period_counts(
+            ws,
+            TimeType.HOUR,
+            1,
+            warmup_period_steps=2,
+            correction_period_steps=0,
+            historical_display_period_steps=0,
+            forecast_period_steps=3,
+        )
+        self.assertEqual(tc.forecast_start_time, ws + timedelta(hours=2))
+        self.assertEqual(
+            station_observation_query_end_realtime(tc),
+            tc.forecast_start_time - timedelta(hours=1),
+        )
+
     def test_load_and_run(self) -> None:
         config_path = _PROJECT_ROOT / "configs" / "example_forecast_config.json"
         start = datetime(2026, 1, 1, 0, 0, 0)
@@ -78,6 +98,64 @@ class TestJsonConfigPipeline(unittest.TestCase):
         # 当前示例的分流节点参数可能使得旁路分量为 0（即 `R5` 全为 0）。
         # 这里更稳健地断言主干河道 `R4` 必须产生正流量。
         self.assertTrue(any(v > 0.0 for v in output["reach_flows"]["R4"]))
+
+    def test_run_calculation_scenario_rainfall_multiscenario(self) -> None:
+        """预报面雨 CSV 注入 + 三情景引擎输出键。"""
+        import tempfile
+
+        config_path = _PROJECT_ROOT / "configs" / "example_forecast_config.json"
+        start = datetime(2026, 1, 1, 0, 0, 0)
+        step = timedelta(hours=1)
+        rain_a = [100.0, 130.0, 160.0, 140.0, 120.0]
+        pet_a = [3.0, 3.5, 4.0, 3.8, 3.2]
+        rain_b = [90.0, 110.0, 140.0, 130.0, 100.0]
+        station_packages = {
+            "STA_A": ForcingData.from_pairs(
+                [
+                    (ForcingKind.PRECIPITATION, TimeSeries(start, step, rain_a)),
+                ]
+            ),
+            "PET_STA_A": ForcingData.single(
+                ForcingKind.POTENTIAL_EVAPOTRANSPIRATION,
+                TimeSeries(start, step, pet_a),
+            ),
+            "STA_B": ForcingData.single(
+                ForcingKind.PRECIPITATION,
+                TimeSeries(start, step, rain_b),
+            ),
+        }
+        lines = ["time,expected,upper,lower"]
+        for i in range(5):
+            t = start + step * i
+            lines.append(
+                f"{t.strftime('%Y-%m-%d %H:%M:%S')},{10.0 + i},{12.0 + i},{8.0 + i}"
+            )
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8", newline=""
+        ) as f:
+            f.write("\n".join(lines))
+            csv_path = f.name
+        try:
+            scen_map = load_catchment_forecast_rainfall_map_from_csv(
+                csv_path, default_catchment_ids=["CA"]
+            )
+            output = run_calculation_from_json(
+                config_path,
+                station_packages,
+                time_type="Hour",
+                step_size=1,
+                warmup_start_time=start,
+                forecast_mode="realtime_forecast",
+                catchment_scenario_rainfall=scen_map,
+                scenario_precipitation="expected",
+                forecast_multiscenario=True,
+            )
+            self.assertIn("multiscenario_engine_outputs", output)
+            ms = output["multiscenario_engine_outputs"]
+            self.assertEqual(set(ms.keys()), {"expected", "upper", "lower"})
+            self.assertIn("catchment_runoffs", ms["upper"])
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
 
     def test_flatten_stations_catalog_categorized(self) -> None:
         raw = {

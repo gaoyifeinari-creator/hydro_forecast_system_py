@@ -17,6 +17,7 @@ from urllib.parse import quote_plus
 
 import pandas as pd
 
+from hydro_engine.core.context import ForecastTimeContext
 from hydro_engine.core.forcing import ForcingData, ForcingKind, parse_forcing_kind
 from hydro_engine.core.timeseries import TimeSeries
 from hydro_engine.read_data import read_station_data
@@ -319,6 +320,51 @@ def load_station_hourly_frame(
     return read_station_data(ref, source_type="file")
 
 
+def station_observation_query_end_realtime(time_context: ForecastTimeContext) -> datetime:
+    """
+    实时预报：测站「实况」库表查询上界 ``t_end``（与 SQL ``TIME <= :t_end`` 配合）。
+
+    取 ``forecast_start_time - time_delta``，使不在库中读取 T0 及之后的记录。
+    雨量、流量、气温等凡从同一测站时序表读取的变量，均应使用该上界，便于在历史 T0 复现实时预报读数。
+    """
+    return time_context.forecast_start_time - time_context.time_delta
+
+
+def meteorology_station_query_end_realtime(time_context: ForecastTimeContext) -> datetime:
+    """兼容旧名，等价于 :func:`station_observation_query_end_realtime`。"""
+    return station_observation_query_end_realtime(time_context)
+
+
+def clip_station_dataframe_rows_before_forecast_start(
+    df: pd.DataFrame,
+    *,
+    forecast_start: datetime,
+) -> Tuple[pd.DataFrame, int]:
+    """
+    去掉 ``TIME_DT``/``TIME`` 不早于 ``forecast_start`` 的行（严格 ``< forecast_start``）。
+
+    用于实时预报下 CSV/文件读入后兜底，避免文件中含 T0 之后「伪实况」。
+    返回 ``(新 DataFrame, 删除行数)``。
+    """
+    if df is None or df.empty:
+        return df, 0
+    tcol = "TIME_DT" if "TIME_DT" in df.columns else ("TIME" if "TIME" in df.columns else None)
+    if not tcol:
+        return df, 0
+    t0 = pd.Timestamp(forecast_start)
+    n0 = len(df)
+    tseries = pd.to_datetime(df[tcol], errors="coerce")
+    out = df[tseries < t0].copy()
+    return out, n0 - len(out)
+
+
+def _empty_station_hourly_frame() -> pd.DataFrame:
+    """与 ``load_station_hourly_frame(..., senids=[])`` 相同列结构，且不发库。"""
+    df = pd.DataFrame(columns=["SENID", "TIME", "V", "AVGV"])
+    df["SENID"] = df["SENID"].astype(str)
+    return _coerce_hourdb_column_names(df)
+
+
 def _resolve_db_source_for_time_type(time_type: str) -> Tuple[str, str]:
     """
     根据计算时间尺度选择数据库读取配置。
@@ -329,6 +375,24 @@ def _resolve_db_source_for_time_type(time_type: str) -> Tuple[str, str]:
     if t == "day":
         return _DEFAULT_STATION_DAILY_SQL_KEY, _DEFAULT_STATION_DAILY_LABEL
     return _DEFAULT_STATION_HOURLY_SQL_KEY, _DEFAULT_STATION_HOURLY_LABEL
+
+
+def _union_station_senids_for_load(
+    *,
+    unified_station_senids: Optional[List[str]],
+    rain_senids: Optional[List[str]],
+    flow_senids: Optional[List[str]],
+) -> Optional[List[str]]:
+    """合并测站 id 列表，供单次库表 ``IN`` 查询。"""
+    if unified_station_senids is not None:
+        u = sorted({str(x).strip() for x in unified_station_senids if str(x).strip()})
+        return u if u else None
+    sset: Set[str] = set()
+    if rain_senids:
+        sset.update(str(x).strip() for x in rain_senids if str(x).strip())
+    if flow_senids:
+        sset.update(str(x).strip() for x in flow_senids if str(x).strip())
+    return sorted(sset) if sset else None
 
 
 def load_rain_flow_for_calculation(
@@ -342,29 +406,42 @@ def load_rain_flow_for_calculation(
     flow_senids: Optional[List[str]] = None,
     senid_chunk_size: int = 1000,
     time_type: str = "Hour",
+    rain_meteorology_time_end: Optional[datetime] = None,
+    station_table_query_end: Optional[datetime] = None,
+    unified_station_senids: Optional[List[str]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[str]]:
     """
-    优先使用 `floodForecastJdbc.json` 连库读取数据库时序表（雨量 V + 流量 AVGV 同表）。
-    - Day 方案：读取 DAYDB（daydb_daily_range[_in]）
-    - 其余方案：读取 HOURDB（hourdb_hourly_range[_in]）
+    读取测站时序表（雨量 V、流量 AVGV 等，库表通常同一张）。
+
+    - **JDBC** 或 **雨量/流量指向同一 JSON 库配置**：按 ``unified_station_senids``（若提供）或
+      ``rain_senids|flow_senids`` 合并后的列表 **一次** ``IN`` 查询，减少库交互。
+    - **双 CSV 文件**：仍各读一次，但共用同一 ``query_end``。
+
+    ``station_table_query_end`` / ``rain_meteorology_time_end``（后者为兼容别名）：
+    实时预报时传入 ``station_observation_query_end_realtime``，使 **所有测站类型** 的 ``t_end``
+    截断到预报起点之前；为 ``None`` 时读到 ``time_end``（历史模拟）。
     """
     warns: List[str] = []
     sql_key, label = _resolve_db_source_for_time_type(time_type)
     jc = str(jdbc_config_path).strip()
-    if jc and Path(jc).is_file():
-        union: Optional[List[str]] = None
-        if rain_senids is not None or flow_senids is not None:
-            sset: Set[str] = set()
-            if rain_senids:
-                sset.update(str(x).strip() for x in rain_senids if str(x).strip())
-            if flow_senids:
-                sset.update(str(x).strip() for x in flow_senids if str(x).strip())
-            union = sorted(sset) if sset else []
+    cap = station_table_query_end if station_table_query_end is not None else rain_meteorology_time_end
+    query_end = time_end if cap is None else min(time_end, cap)
+    if cap is not None and query_end < time_end:
+        warns.append(
+            "[data] 实时预报：测站表 t_end 截断至预报起点之前（雨/流/温等共用，单次查询）"
+        )
 
+    union = _union_station_senids_for_load(
+        unified_station_senids=unified_station_senids,
+        rain_senids=rain_senids,
+        flow_senids=flow_senids,
+    )
+
+    if jc and Path(jc).is_file():
         shared = load_station_hourly_frame(
             jc,
             time_start=time_start,
-            time_end=time_end,
+            time_end=query_end,
             senids=union,
             senid_chunk_size=senid_chunk_size,
             db_sql_key=sql_key,
@@ -381,8 +458,8 @@ def load_rain_flow_for_calculation(
         shared = load_station_hourly_frame(
             rp,
             time_start=time_start,
-            time_end=time_end,
-            senids=rain_senids or flow_senids,
+            time_end=query_end,
+            senids=union,
             senid_chunk_size=senid_chunk_size,
             db_sql_key=sql_key,
             db_label=label,
@@ -395,7 +472,7 @@ def load_rain_flow_for_calculation(
     rain_df = load_station_hourly_frame(
         rp,
         time_start=time_start,
-        time_end=time_end,
+        time_end=query_end,
         senids=rain_senids,
         senid_chunk_size=senid_chunk_size,
         db_sql_key=sql_key if Path(rp).suffix.lower() == ".json" else None,
@@ -404,7 +481,7 @@ def load_rain_flow_for_calculation(
     flow_df = load_station_hourly_frame(
         fp,
         time_start=time_start,
-        time_end=time_end,
+        time_end=query_end,
         senids=flow_senids,
         senid_chunk_size=senid_chunk_size,
         db_sql_key=sql_key if Path(fp).suffix.lower() == ".json" else None,
@@ -425,7 +502,9 @@ def load_csv(path: str) -> pd.DataFrame:
 
 
 def collect_rain_station_ids(binding_specs: List[Dict[str, Any]]) -> Set[str]:
-    """Collect precipitation/PET station IDs used by build_station_packages."""
+    """
+    收集 ``build_station_packages`` 用到的测站 id：降水、潜在蒸发（可选关闭）、**气温**。
+    """
     out: Set[str] = set()
     for spec in binding_specs:
         for var in list(spec.get("variables") or []):
@@ -436,6 +515,8 @@ def collect_rain_station_ids(binding_specs: List[Dict[str, Any]]) -> Set[str]:
             elif kind is ForcingKind.POTENTIAL_EVAPOTRANSPIRATION:
                 if not bool(var.get("use_station_pet", True)):
                     continue
+            elif kind is ForcingKind.AIR_TEMPERATURE:
+                pass
             else:
                 continue
 
@@ -445,6 +526,17 @@ def collect_rain_station_ids(binding_specs: List[Dict[str, Any]]) -> Set[str]:
                 if sid:
                     out.add(sid)
     return out
+
+
+def collect_all_station_ids_for_calculation(binding_specs: List[Dict[str, Any]], scheme: Any) -> List[str]:
+    """
+    计算管线一次读库所需的全部测站 id（子流域绑定：雨/PET/气温；节点：流量实测/入流等）。
+
+    与 :func:`load_rain_flow_for_calculation` 的 ``unified_station_senids`` 配合，实现单表单次查询。
+    """
+    s = set(collect_rain_station_ids(binding_specs))
+    s.update(collect_observed_flow_station_ids(scheme))
+    return sorted(s)
 
 
 def collect_observed_flow_station_ids(scheme: Any) -> Set[str]:

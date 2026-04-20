@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 from functools import lru_cache
@@ -60,7 +61,8 @@ DIALECT_SQL_FILE: Dict[str, str] = {
 }
 
 _engine_lock = threading.Lock()
-_engine_cache: Dict[Tuple[str, int, int], Engine] = {}
+_engine_cache: "OrderedDict[Tuple[str, int, int], Engine]" = OrderedDict()
+_ENGINE_CACHE_MAX_SIZE = 8
 
 
 def _resolve_yaml_path(dialect: str, options: Dict[str, Any]) -> Path:
@@ -157,17 +159,29 @@ def get_shared_engine(url: str, pool_min: int, max_overflow: int = 0) -> Engine:
     key = (url, pool_min, max_overflow)
     with _engine_lock:
         eng = _engine_cache.get(key)
-        if eng is None:
-            engine_url, connect_args = _dm_dmpython_url_and_connect_args(url)
-            eng = create_engine(
-                engine_url,
-                connect_args=connect_args,
-                pool_size=pool_min,
-                max_overflow=max_overflow,
-                pool_pre_ping=True,
-                pool_timeout=30,
-            )
-            _engine_cache[key] = eng
+        if eng is not None:
+            _engine_cache.move_to_end(key)
+            return eng
+
+        engine_url, connect_args = _dm_dmpython_url_and_connect_args(url)
+        eng = create_engine(
+            engine_url,
+            connect_args=connect_args,
+            pool_size=pool_min,
+            max_overflow=max_overflow,
+            pool_pre_ping=True,
+            pool_timeout=30,
+        )
+        _engine_cache[key] = eng
+        _engine_cache.move_to_end(key)
+
+        # LRU 淘汰：避免长生命周期进程在 URL/池参数多样时无限增长。
+        while len(_engine_cache) > _ENGINE_CACHE_MAX_SIZE:
+            _, old_eng = _engine_cache.popitem(last=False)
+            try:
+                old_eng.dispose()
+            except Exception:
+                pass
         return eng
 
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import copy
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import math
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from hydro_engine.core.context import (
     ForecastTimeContext,
@@ -36,6 +37,11 @@ from hydro_engine.engine.calculator import CalculationEngine, CalculationResult
 from hydro_engine.engine.scheme import ForecastingScheme
 from hydro_engine.models import MODEL_REGISTRY, _make_model_from_registry
 from hydro_engine.processing.pipeline import CatchmentDataSynthesizer
+from hydro_engine.forecast.catchment_forecast_rainfall import CatchmentForecastRainfall
+from hydro_engine.forecast.scenario_forcing import (
+    ScenarioName,
+    patch_catchment_scenario_precipitation,
+)
 
 
 def _normalize_catchment_forcing_bindings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -699,6 +705,10 @@ def run_calculation_from_json(
     observed_flows: Optional[Dict[str, TimeSeries]] = None,
     forecast_mode: Optional[str] = None,
     catchment_workers: Optional[int] = None,
+    *,
+    catchment_scenario_rainfall: Optional[Dict[str, CatchmentForecastRainfall]] = None,
+    scenario_precipitation: str = "expected",
+    forecast_multiscenario: bool = False,
 ) -> Dict[str, Any]:
     scheme, binding_specs, time_context = load_scheme_from_json(
         file_path=config_path,
@@ -748,15 +758,67 @@ def run_calculation_from_json(
         cid: pool.get_catchment_forcing(scenario_id, cid) for cid in scheme.catchments.keys()
     }
 
-    result = CalculationEngine().run(
-        scheme,
-        catchment_forcing,
-        time_context,
-        observed_flows or {},
-        catchment_workers=catchment_workers,
-    )
+    scenario_map = catchment_scenario_rainfall or {}
+    primary_scen = str(scenario_precipitation or "expected").strip().lower()
+    if primary_scen not in {"expected", "upper", "lower"}:
+        raise ValueError(
+            "scenario_precipitation must be one of: expected, upper, lower "
+            f"(got {scenario_precipitation!r})"
+        )
+
+    def _forcing_for_scenario(scen: str) -> Dict[str, ForcingData]:
+        out = copy.deepcopy(catchment_forcing)
+        for cid, rain in scenario_map.items():
+            patch_catchment_scenario_precipitation(
+                out,
+                time_context=time_context,
+                catchment_id=cid,
+                rainfall=rain,
+                scenario=cast(ScenarioName, scen),
+            )
+        return out
+
+    multiscenario_engine_outputs: Optional[Dict[str, Dict[str, Any]]] = None
+    if scenario_map:
+        if forecast_multiscenario:
+            multiscenario_engine_outputs = {}
+            primary_result: Optional[CalculationResult] = None
+            for scen in ("expected", "upper", "lower"):
+                patched = _forcing_for_scenario(scen)
+                res = CalculationEngine().run(
+                    scheme,
+                    patched,
+                    time_context,
+                    observed_flows or {},
+                    catchment_workers=catchment_workers,
+                )
+                multiscenario_engine_outputs[scen] = _serialize_result(scheme, res)
+                if scen == primary_scen:
+                    primary_result = res
+            assert primary_result is not None
+            result = primary_result
+        else:
+            patched = _forcing_for_scenario(primary_scen)
+            result = CalculationEngine().run(
+                scheme,
+                patched,
+                time_context,
+                observed_flows or {},
+                catchment_workers=catchment_workers,
+            )
+    else:
+        result = CalculationEngine().run(
+            scheme,
+            catchment_forcing,
+            time_context,
+            observed_flows or {},
+            catchment_workers=catchment_workers,
+        )
+
     payload = _serialize_result(scheme, result)
     payload["forecast_mode"] = resolved_mode
+    if multiscenario_engine_outputs is not None:
+        payload["multiscenario_engine_outputs"] = multiscenario_engine_outputs
     return payload
 
 
