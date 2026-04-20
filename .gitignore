@@ -27,3 +27,14 @@ Thumbs.db
 configs/dameng_services.json
 configs/station_hourly_database.json
 configs/floodForecastJdbc.json
+
+# Local runtime outputs / artifacts
+calibration/
+output/
+configs/result*.json
+
+# Temporary diagnostics / ad-hoc test scripts
+scripts/diagnose_scheme_conversion.py
+tests/test_forecast_rain_config_parser.py
+tests/test_forecast_skeleton_pipeline.py
+tests/test_multisource_areal_rainfall.py
