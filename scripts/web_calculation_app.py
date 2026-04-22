@@ -891,6 +891,33 @@ def main() -> None:
         with st.expander(f"数据提示 ({len(warns)} 条)", expanded=False):
             st.text("\n".join(warns[:80]) + ("\n…" if len(warns) > 80 else ""))
 
+    ftime_info = aux.get("forecast_rain_ftime_info") or {}
+    source_rows = ftime_info.get("source_rows") or []
+    if source_rows:
+        with st.expander("预报降雨 FTIME 信息", expanded=False):
+            req = ftime_info.get("request") or {}
+            if req:
+                st.caption(
+                    "请求参数："
+                    f"time_type={req.get('time_type')} "
+                    f"step={req.get('step_size')} "
+                    f"dbtype={req.get('dbtype')} "
+                    f"begin={req.get('forecast_begin')} "
+                    f"end={req.get('forecast_end')}"
+                )
+            rows: List[Dict[str, Any]] = []
+            for r in source_rows:
+                ftime_list = [str(x) for x in (r.get("ftime") or [])]
+                rows.append(
+                    {
+                        "subtype": str(r.get("subtype", "")),
+                        "span(h)": int(r.get("span_hours", 0) or 0),
+                        "records": int(r.get("records", 0) or 0),
+                        "FTIME": ", ".join(ftime_list),
+                    }
+                )
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, height=220)
+
     if out is None or times is None:
         st.info("请先在侧栏配置路径与时间参数，点击「读取数据」或「预报计算」。")
         return

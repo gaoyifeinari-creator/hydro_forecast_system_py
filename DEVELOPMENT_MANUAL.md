@@ -661,3 +661,69 @@ sequenceDiagram
 - `tests/test_reservoir_dispatch_model.py`：水库调度模型测试。
 - `tests/test_reservoir_inflow_forecast_override.py`：水库入库预报覆盖测试。
 - `tests/test_rolling_forecast_eval.py`：滚动预报评估测试。
+
+---
+
+## 11. 数据结构调整说明（2026-04）
+
+本节汇总 2026-04 期间对“配置结构 + 运行期数据结构”的统一化改造。目标：
+
+- 减少双向冗余，降低配置维护成本
+- 将数据库连接/表策略与预报方案业务参数解耦
+- 为集合预报与向量化计算统一时序载体
+
+### 11.1 `TimeSeries` NumPy 化
+
+- 文件：`hydro_engine/core/timeseries.py`
+- 变更：
+  - `values` 从 `List[float]` 升级为 `np.ndarray`
+  - 形状约定：
+    - 确定性：`(time_steps,)`
+    - 集合：`(num_scenarios, time_steps)`
+  - 增加 `time_steps`、`num_scenarios`、`is_ensemble`
+- 影响：
+  - 序列长度判断统一使用 `series.time_steps`
+  - JSON/UI 输出前统一 `tolist()`
+
+### 11.2 拓扑单一真相：仅在 `reaches` 定义连接关系
+
+- 文件：`hydro_engine/io/json_config.py`、`scripts/convert_legacy_config.py`
+- 变更：
+  - 配置不再要求 `nodes[].incoming_reach_ids/outgoing_reach_ids`
+  - 运行时根据 `reaches[].upstream_node_id/downstream_node_id` 自动回填节点入/出边
+  - 转换脚本输出中不再写节点 `incoming/outgoing` 冗余字段
+
+### 11.3 预报雨数据库参数迁移到 JDBC 配置
+
+- 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`、`scripts/calculation_pipeline_runner.py`
+- 变更：
+  - 删除方案内 `future_rainfall.db` 读取
+  - 统一从 `configs/floodForecastJdbc.json` 的 `forecast_rain` 读取：
+    - `service_name`
+    - `table_name`
+    - `prefer_two_step_latest`
+
+### 11.4 预报源选择去重：只认 `selected_source_name`
+
+- 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`
+- 变更：
+  - 不再使用 source 下的 `is_select/isSelect`
+  - 统一由 `future_rainfall.selected_source_name` 选择源
+  - 若指定名称不在 `sources[].name` 中，加载时报错
+
+### 11.5 站点目录精简
+
+- 配置：`configs/forecastSchemeConf.json`（及转换脚本同步）
+- 变更：
+  - `stations.rain_gauges[*].unit` 移除（雨量默认单位为 mm）
+  - `stations.reservoir` 移除（与 `nodes[].station_binding` 重复）
+  - `scripts/convert_legacy_config.py` 不再生成上述冗余字段
+- 保留：
+  - 计算所需的入库/出库/水位站绑定仍在 `nodes[].station_binding`
+
+### 11.6 工具统一
+
+- 新增：`hydro_engine/io/scheme_config_utils.py`
+  - scheme 读取、精确匹配、默认步长选择、catalog 名称提取集中复用
+- `hydro_engine/core/context.py` 增加 `native_time_delta(...)`
+  - 统一 `time_type + step_size -> timedelta` 实现

@@ -7,22 +7,37 @@
     {
       "time_type": "Hour",
       "step_size": 1,
+      "dbtype": 0,
       "time_axis": {
-        "warmup_period_steps": 720,
+        "warmup_period_steps": 240,
         "correction_period_steps": 48,
         "historical_display_period_steps": 72,
         "forecast_period_steps": 48
+      },
+      "future_rainfall": {
+        "selected_source_name": "南瑞气象",
+        "sources": [
+          {
+            "name": "南瑞气象",
+            "unit_type": "10050",
+            "time_span_arr": [
+              1,
+              3,
+              6,
+              12
+            ],
+            "sub_sources": []
+          }
+         
+        ],
+        "distribution_params": [
+        ]
       },
       "nodes": [
         {
           "id": "1041",
           "name": "佛子岭",
           "type": "reservoir",
-          "incoming_reach_ids": [
-            "R_1043_TO_1041",
-            "R_1039_TO_1041"
-          ],
-          "outgoing_reach_ids": [],
           "local_catchment_ids": [
             "4101"
           ],
@@ -41,10 +56,6 @@
           "id": "1043",
           "name": "磨子潭",
           "type": "reservoir",
-          "incoming_reach_ids": [],
-          "outgoing_reach_ids": [
-            "R_1043_TO_1041"
-          ],
           "local_catchment_ids": [
             "4301",
             "4302"
@@ -64,10 +75,6 @@
           "id": "1039",
           "name": "白莲崖",
           "type": "reservoir",
-          "incoming_reach_ids": [],
-          "outgoing_reach_ids": [
-            "R_1039_TO_1041"
-          ],
           "local_catchment_ids": [
             "3901",
             "3902",
@@ -116,6 +123,8 @@
       "catchments": [
         {
           "id": "4101",
+          "name": "单元4101",
+          "downstream_node_id": "1041",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -158,6 +167,8 @@
         },
         {
           "id": "4301",
+          "name": "单元4301",
+          "downstream_node_id": "1043",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -200,6 +211,8 @@
         },
         {
           "id": "4302",
+          "name": "单元4302",
+          "downstream_node_id": "1043",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -226,8 +239,7 @@
               "kkss": 0.5,
               "kkg": 0.9,
               "cs": 0.75,
-              "area": 404.8,
-              "debug_trace": true
+              "area": 404.8
             },
             "state": {
               "wu": 5.3,
@@ -243,6 +255,8 @@
         },
         {
           "id": "3901",
+          "name": "单元3901",
+          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -285,6 +299,8 @@
         },
         {
           "id": "3902",
+          "name": "单元3902",
+          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -327,6 +343,8 @@
         },
         {
           "id": "3903",
+          "name": "单元3903",
+          "downstream_node_id": "1039",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -372,155 +390,81 @@
         "rain_gauges": [
           {
             "id": "3110104484",
-            "name": "3110104484",
-            "unit": "mm"
+            "name": "磨子潭"
           },
           {
             "id": "3110103984",
-            "name": "3110103984",
-            "unit": "mm"
+            "name": "白莲崖"
           },
           {
             "id": "3110104084",
-            "name": "3110104084",
-            "unit": "mm"
+            "name": "佛子岭"
           },
           {
             "id": "3110105084",
-            "name": "3110105084",
-            "unit": "mm"
+            "name": "单龙寺"
           },
           {
             "id": "3110111084",
-            "name": "3110111084",
-            "unit": "mm"
+            "name": "汪家冲"
           },
           {
             "id": "3110120484",
-            "name": "3110120484",
-            "unit": "mm"
+            "name": "爬爬岩"
           },
           {
             "id": "3110104584",
-            "name": "3110104584",
-            "unit": "mm"
+            "name": "头陀"
           },
           {
             "id": "3110102884",
-            "name": "3110102884",
-            "unit": "mm"
+            "name": "黄尾河"
           },
           {
             "id": "3110102700",
-            "name": "3110102700",
-            "unit": "mm"
+            "name": "河口寺"
           },
           {
             "id": "3110102600",
-            "name": "3110102600",
-            "unit": "mm"
+            "name": "阔滩"
           },
           {
             "id": "3110103484",
-            "name": "3110103484",
-            "unit": "mm"
+            "name": "漫水河"
           },
           {
             "id": "3110103284",
-            "name": "3110103284",
-            "unit": "mm"
+            "name": "长山冲"
           },
           {
             "id": "3110103084",
-            "name": "3110103084",
-            "unit": "mm"
+            "name": "上土寺"
           },
           {
             "id": "3110103384",
-            "name": "3110103384",
-            "unit": "mm"
+            "name": "太平畈"
           },
           {
             "id": "3110106884",
-            "name": "3110106884",
-            "unit": "mm"
+            "name": "千工堰"
           },
           {
             "id": "3110106984",
-            "name": "3110106984",
-            "unit": "mm"
+            "name": "郑家湾"
           },
           {
             "id": "3110102984",
-            "name": "3110102984",
-            "unit": "mm"
+            "name": "太阳"
           },
           {
             "id": "3110103184",
-            "name": "3110103184",
-            "unit": "mm"
+            "name": "千笠寺"
           }
         ],
         "evapotranspiration_stations": [],
         "air_temperature_stations": [],
         "flow_stations": [],
-        "stage_stations": [],
-        "reservoir": [
-          {
-            "node_id": "1041",
-            "name": "佛子岭",
-            "stations": [
-              {
-                "id": "3110104104",
-                "name": "1041入库流量站"
-              },
-              {
-                "id": "3110104110",
-                "name": "1041出库流量站"
-              },
-              {
-                "id": "3110104183",
-                "name": "1041水位站"
-              }
-            ]
-          },
-          {
-            "node_id": "1043",
-            "name": "磨子潭",
-            "stations": [
-              {
-                "id": "3110104304",
-                "name": "1043入库流量站"
-              },
-              {
-                "id": "3110104310",
-                "name": "1043出库流量站"
-              },
-              {
-                "id": "3110104383",
-                "name": "1043水位站"
-              }
-            ]
-          },
-          {
-            "node_id": "1039",
-            "name": "白莲崖",
-            "stations": [
-              {
-                "id": "3110103904",
-                "name": "1039入库流量站"
-              },
-              {
-                "id": "3110103910",
-                "name": "1039出库流量站"
-              },
-              {
-                "id": "3110103983",
-                "name": "1039水位站"
-              }
-            ]
-          }
-        ]
+        "stage_stations": []
       },
       "catchment_forcing_bindings": [
         {
@@ -532,27 +476,33 @@
               "stations": [
                 {
                   "id": "3110104484",
-                  "weight": 0.06
+                  "weight": 0.06,
+                  "name": "磨子潭"
                 },
                 {
                   "id": "3110103984",
-                  "weight": 0.143
+                  "weight": 0.143,
+                  "name": "白莲崖"
                 },
                 {
                   "id": "3110104084",
-                  "weight": 0.066
+                  "weight": 0.066,
+                  "name": "佛子岭"
                 },
                 {
                   "id": "3110105084",
-                  "weight": 0.344
+                  "weight": 0.344,
+                  "name": "单龙寺"
                 },
                 {
                   "id": "3110111084",
-                  "weight": 0.152
+                  "weight": 0.152,
+                  "name": "汪家冲"
                 },
                 {
                   "id": "3110120484",
-                  "weight": 0.152
+                  "weight": 0.152,
+                  "name": "爬爬岩"
                 }
               ]
             },
@@ -587,11 +537,13 @@
               "stations": [
                 {
                   "id": "3110104584",
-                  "weight": 0.713
+                  "weight": 0.713,
+                  "name": "头陀"
                 },
                 {
                   "id": "3110104484",
-                  "weight": 0.287
+                  "weight": 0.287,
+                  "name": "磨子潭"
                 }
               ]
             },
@@ -626,15 +578,18 @@
               "stations": [
                 {
                   "id": "3110102884",
-                  "weight": 0.268
+                  "weight": 0.268,
+                  "name": "黄尾河"
                 },
                 {
                   "id": "3110102700",
-                  "weight": 0.377
+                  "weight": 0.377,
+                  "name": "河口寺"
                 },
                 {
                   "id": "3110102600",
-                  "weight": 0.355
+                  "weight": 0.355,
+                  "name": "阔滩"
                 }
               ]
             },
@@ -669,11 +624,13 @@
               "stations": [
                 {
                   "id": "3110103984",
-                  "weight": 0.441
+                  "weight": 0.441,
+                  "name": "白莲崖"
                 },
                 {
                   "id": "3110103484",
-                  "weight": 0.559
+                  "weight": 0.559,
+                  "name": "漫水河"
                 }
               ]
             },
@@ -708,19 +665,23 @@
               "stations": [
                 {
                   "id": "3110103284",
-                  "weight": 0.28
+                  "weight": 0.28,
+                  "name": "长山冲"
                 },
                 {
                   "id": "3110103084",
-                  "weight": 0.354
+                  "weight": 0.354,
+                  "name": "上土寺"
                 },
                 {
                   "id": "3110103384",
-                  "weight": 0.254
+                  "weight": 0.254,
+                  "name": "太平畈"
                 },
                 {
                   "id": "3110106884",
-                  "weight": 0.111
+                  "weight": 0.111,
+                  "name": "千工堰"
                 }
               ]
             },
@@ -755,19 +716,23 @@
               "stations": [
                 {
                   "id": "3110106984",
-                  "weight": 0.121
+                  "weight": 0.121,
+                  "name": "郑家湾"
                 },
                 {
                   "id": "3110103484",
-                  "weight": 0.134
+                  "weight": 0.134,
+                  "name": "漫水河"
                 },
                 {
                   "id": "3110102984",
-                  "weight": 0.239
+                  "weight": 0.239,
+                  "name": "太阳"
                 },
                 {
                   "id": "3110103184",
-                  "weight": 0.506
+                  "weight": 0.506,
+                  "name": "千笠寺"
                 }
               ]
             },

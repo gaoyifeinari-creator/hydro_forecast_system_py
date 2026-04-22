@@ -162,6 +162,7 @@ def _load_forecast_rain_from_scheme_db(
     time_context: Any,
     dbtype: int,
     on_log: OnLog,
+    debug_info_out: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, CatchmentForecastRainfall]:
     """
     从 scheme.future_rainfall 读取配置，查库整编并生成 catchment 级预报雨量情景。
@@ -189,6 +190,12 @@ def _load_forecast_rain_from_scheme_db(
         )
         repo = SqlAlchemyForecastRainRepository(repo_cfg)
         compiler = MultiSourceArealRainfallCompiler(repo)
+        rain_read_begin, rain_read_end = _resolve_forecast_rain_read_anchor_window(
+            forecast_start_time=time_context.forecast_start_time,
+            end_time=time_context.end_time,
+            time_delta=time_context.time_delta,
+            dbtype=int(dbtype),
+        )
         debug_records: List[Tuple[str, int, List[Any]]] = []
 
         def _debug_records_hook(subtype: str, span: int, records: Any) -> None:
@@ -198,8 +205,8 @@ def _load_forecast_rain_from_scheme_db(
                 pass
 
         req = CompileRequest(
-            forecast_begin=time_context.forecast_start_time,
-            forecast_end=time_context.end_time,
+            forecast_begin=rain_read_begin,
+            forecast_end=rain_read_end,
             target_time_type=str(time_type),
             target_time_step=int(step_size),
             # WEA_GFSFORRAIN 源数据是前时标；按当前方案 dbtype 做一次锚点转换（前->后），仅在整编阶段执行。
@@ -215,19 +222,37 @@ def _load_forecast_rain_from_scheme_db(
         _log(
             "[forecast_scenario_rain][debug] request "
             f"time_type={req.target_time_type} step={req.target_time_step} dbtype={req.dbtype} "
-            f"forecast_begin={req.forecast_begin} forecast_end={req.forecast_end}",
+            f"display_begin={time_context.forecast_start_time} display_end={time_context.end_time} "
+            f"read_anchor_begin={req.forecast_begin} read_anchor_end={req.forecast_end}",
             on_log,
         )
         points = compiler.compile(req)
+        source_debug_rows: List[Dict[str, Any]] = []
         # 打印“统一 FTIME + 明细记录”对账信息，便于与 HPS 逐条核对。
         for subtype, span, records in debug_records:
             if not records:
+                source_debug_rows.append(
+                    {
+                        "subtype": str(subtype),
+                        "span_hours": int(span),
+                        "records": 0,
+                        "ftime": [],
+                    }
+                )
                 _log(
                     f"[forecast_scenario_rain][debug] subtype={subtype} span={span}h records=0",
                     on_log,
                 )
                 continue
             ftime_set = sorted({str(getattr(r, "ftime", "")) for r in records})
+            source_debug_rows.append(
+                {
+                    "subtype": str(subtype),
+                    "span_hours": int(span),
+                    "records": int(len(records)),
+                    "ftime": list(ftime_set),
+                }
+            )
             _log(
                 f"[forecast_scenario_rain][debug] subtype={subtype} span={span}h records={len(records)} "
                 f"ftime={ftime_set}",
@@ -275,6 +300,21 @@ def _load_forecast_rain_from_scheme_db(
             f"source={bundle.selected_source.name}",
             on_log,
         )
+        if debug_info_out is not None:
+            debug_info_out.clear()
+            debug_info_out.update(
+                {
+                    "request": {
+                        "time_type": str(req.target_time_type),
+                        "step_size": int(req.target_time_step),
+                        "dbtype": int(req.dbtype),
+                        "forecast_begin": str(req.forecast_begin),
+                        "forecast_end": str(req.forecast_end),
+                    },
+                    "source_rows": source_debug_rows,
+                    "selected_source_name": str(bundle.selected_source.name),
+                }
+            )
         return out
     except Exception as exc:  # noqa: BLE001
         _log(f"[forecast_scenario_rain] db compile failed: {exc}", on_log)
@@ -289,12 +329,32 @@ def _resolve_actual_forecast_start(
 ) -> datetime:
     """
     实际预报起点：
-    - 与 UI/配置输入保持一致，不再按 dbtype 做额外平移。
-    - 前后时标差异通过“读数窗口/标签/整编锚点”处理，不改起报时刻本身。
+    - 输入时间即“界面显示的起报时间（预报第一个时刻标签）”。
+    - 前后时标的数据库读数锚点在预报降雨读库阶段单独处理，不在此处平移。
     """
     _ = time_delta
     _ = dbtype
     return forecast_start_time_input
+
+
+def _resolve_forecast_rain_read_anchor_window(
+    *,
+    forecast_start_time: datetime,
+    end_time: datetime,
+    time_delta: timedelta,
+    dbtype: int,
+) -> Tuple[datetime, datetime]:
+    """
+    解析预报降雨读库锚点窗口。
+
+    规则：
+    - 前时标（dbtype=-1）：读库锚点与展示时标一致。
+    - 后时标（dbtype!= -1）：读库锚点整体回拨 1 步，
+      即展示首时刻 T0 对应的库锚点为 T0-time_delta。
+    """
+    if int(dbtype) == -1:
+        return forecast_start_time, end_time
+    return forecast_start_time - time_delta, end_time - time_delta
 
 
 def _shift_station_df_time_label_for_dbtype(
@@ -304,9 +364,13 @@ def _shift_station_df_time_label_for_dbtype(
     dbtype: int,
 ) -> pd.DataFrame:
     """
-    前时标下将测站表时间标签统一回拨 1 个步长。
+    按“实况库源为后时标”将标签映射到方案展示时标：
 
-    语义对齐 Java 版：dbtype=-1 时，库中落在“时段末”的值展示为“时段起”标签。
+    - dbtype=0（后时标展示）：不平移（库时刻即展示时刻）
+    - dbtype=-1（前时标展示）：标签回拨 1 步（例如库 05:00 -> 展示 04:00）
+
+    说明：预报降雨 WEA_GFSFORRAIN 的前时标处理在预报面雨整编链路中单独执行，
+    不与本函数混用。
     """
     if df is None or df.empty:
         return df
@@ -319,6 +383,38 @@ def _shift_station_df_time_label_for_dbtype(
         ts = pd.to_datetime(out[col], errors="coerce")
         out[col] = ts - time_delta
     return out
+
+
+def _resolve_station_read_window_for_dbtype(
+    *,
+    read_time_start: datetime,
+    read_time_end: datetime,
+    station_obs_end: Optional[datetime],
+    time_delta: timedelta,
+    dbtype: int,
+) -> Tuple[datetime, datetime, Optional[datetime]]:
+    """
+    解析测站读库时间锚点。
+
+    站点实况源（hourdb/daydb）固定为后时标：
+
+    - dbtype=0（后时标展示）：读窗不平移
+    - dbtype=-1（前时标展示）：读窗 +1 步（读取后时标源），随后展示标签再 -1 步
+
+    说明：预报降雨 WEA_GFSFORRAIN 的读库锚点平移在
+    `_resolve_forecast_rain_read_anchor_window` 单独处理。
+    """
+    if int(dbtype) != -1:
+        return read_time_start, read_time_end, station_obs_end
+    shifted_start = read_time_start + time_delta
+    shifted_end = read_time_end + time_delta
+    shifted_obs_end = station_obs_end + time_delta if station_obs_end is not None else None
+    # 日方案下，部分 daydb 记录时间可能位于当日白天（如 08:00）。
+    # 若仅平移 1 天，实时 t_end 可能卡在 00:00，导致“最后一个历史日”漏读；
+    # 这里额外放宽 1 天，随后仍由 clip(<forecast_start) 剪掉预报段，确保展示正确。
+    if shifted_obs_end is not None and time_delta >= timedelta(days=1):
+        shifted_obs_end = shifted_obs_end + time_delta
+    return shifted_start, shifted_end, shifted_obs_end
 
 
 def _infer_debug_table_columns(rows: List[Dict[str, Any]], *, max_cols: int = 40) -> List[str]:
@@ -608,6 +704,12 @@ def run_calculation_pipeline(
         f"actual_forecast_start={forecast_start_time.isoformat()}",
         on_log,
     )
+    _log(
+        "[time] timestamp_convention "
+        "station_hourdb_daydb=backward_label (read/display direct), "
+        "forecast_wea_gfsforrain=forward_label (handled in forecast-rain pipeline)",
+        on_log,
+    )
     # 嵌套时间轴：预热总长 W 自 T0 向历史回溯；总预热步数不再与 C、H 相加。
     pre_steps = int(warmup_steps)
     t0 = forecast_start_time - td * pre_steps  # warmup_start_time
@@ -663,13 +765,13 @@ def run_calculation_pipeline(
     station_obs_end = None
     if str(forecast_mode).strip().lower() == "realtime_forecast":
         station_obs_end = station_observation_query_end_realtime(time_context)
-    if int(dbtype) == -1:
-        # 前时标：读数窗口整体前移 1 步（读取“后置标签”数据），随后再统一回拨标签。
-        # 这可避免末端少一条导致 interp 复制前值。
-        read_time_start = read_time_start + time_context.time_delta
-        read_time_end = read_time_end + time_context.time_delta
-        if station_obs_end is not None:
-            station_obs_end = station_obs_end + time_context.time_delta
+    read_time_start, read_time_end, station_obs_end = _resolve_station_read_window_for_dbtype(
+        read_time_start=read_time_start,
+        read_time_end=read_time_end,
+        station_obs_end=station_obs_end,
+        time_delta=time_context.time_delta,
+        dbtype=int(dbtype),
+    )
     if station_obs_end is not None:
         _log(
             "[data] realtime_forecast: station table t_end capped at "
@@ -695,8 +797,10 @@ def run_calculation_pipeline(
         station_table_query_end=station_obs_end,
         unified_station_senids=unified_for_load,
     )
-    # 前时标：测站数据时间标签回拨 1 步；后时标保持原样。
-    # 单库源路径下 rain_df/flow_df 可能是同一对象，避免重复回拨。
+    # 测站实况源固定为后时标：
+    # - 后时标方案：标签不动
+    # - 前时标方案：标签回拨 1 步（例如库 05:00 -> 展示 04:00）
+    # 单库源路径下 rain_df/flow_df 可能是同一对象，避免重复处理。
     if flow_df is rain_df:
         shifted = _shift_station_df_time_label_for_dbtype(
             rain_df,
@@ -716,11 +820,14 @@ def run_calculation_pipeline(
             time_delta=time_context.time_delta,
             dbtype=dbtype,
         )
-    if int(dbtype) == -1:
-        _log(
-            f"[time] dbtype=-1: station dataframe labels shifted by -{time_context.time_delta}",
-            on_log,
-        )
+    station_shift_label = (
+        f"-{time_context.time_delta}" if int(dbtype) == -1 else "0:00:00"
+    )
+    _log(
+        "[time] station dataframe labels shifted "
+        f"dbtype={dbtype} shift={station_shift_label}",
+        on_log,
+    )
 
     if station_obs_end is not None:
         fs_t = time_context.forecast_start_time
@@ -815,6 +922,7 @@ def run_calculation_pipeline(
         forecast_scenario_default_catchment_ids,
         on_log=on_log,
     )
+    forecast_rain_ftime_info: Dict[str, Any] = {}
     if not scenario_rain_map:
         scenario_rain_map = _load_forecast_rain_from_scheme_db(
             config_path=config_used_path,
@@ -824,6 +932,7 @@ def run_calculation_pipeline(
             time_context=time_context,
             dbtype=int(dbtype),
             on_log=on_log,
+            debug_info_out=forecast_rain_ftime_info,
         )
     if scenario_rain_map:
         _log(
@@ -940,6 +1049,7 @@ def run_calculation_pipeline(
         "station_temp": station_temp,
         "station_flow": station_flow,
         "catchment_rain": catchment_rain_ui,
+        "forecast_rain_ftime_info": dict(forecast_rain_ftime_info),
     }
 
     runtime_cache: Dict[str, Any] = {
