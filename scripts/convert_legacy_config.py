@@ -413,8 +413,6 @@ def _scheme_payload_from_sections(
     stage_station_seen: Dict[str, Dict[str, Any]] = {}
     reservoir_catalog: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"node_id": "", "name": "", "stations": []})
 
-    upstream_index: Dict[str, List[str]] = defaultdict(list)
-    outgoing_index: Dict[str, List[str]] = defaultdict(list)
 
     for sec in sections:
         if not isinstance(sec, dict):
@@ -466,7 +464,7 @@ def _scheme_payload_from_sections(
                             continue
                         display = str(st.get("name", "") or "").strip() or sid
                         if sid not in rain_station_seen:
-                            rain_station_seen[sid] = {"id": sid, "name": display, "unit": "mm"}
+                            rain_station_seen[sid] = {"id": sid, "name": display}
                         else:
                             cur = str(rain_station_seen[sid].get("name", "") or "").strip()
                             if cur == sid and display != sid:
@@ -481,8 +479,6 @@ def _scheme_payload_from_sections(
             "id": node_id,
             "name": _normalize_name(_pick(sec, ["secName", "name"], _pick(ds, ["name"], None)), node_id),
             "type": node_type,
-            "incoming_reach_ids": [],  # 后续回填
-            "outgoing_reach_ids": [],  # 后续回填
             "local_catchment_ids": sorted(set(local_catchment_ids)),
             "station_binding": station_binding,
             # 旧字段兼容：bHisCalcToPar 表示“是否用实测值演进”
@@ -545,13 +541,7 @@ def _scheme_payload_from_sections(
                     ),
                 }
             )
-            outgoing_index[secid].append(reach_id)
-            upstream_index[down_id].append(reach_id)
-
-    node_map = {n["id"]: n for n in nodes}
-    for nid, n in node_map.items():
-        n["incoming_reach_ids"] = upstream_index.get(nid, [])
-        n["outgoing_reach_ids"] = outgoing_index.get(nid, [])
+            # 拓扑单一真相放在 reaches；nodes 不再冗余维护 incoming/outgoing。
 
     return {
         "time_type": time_type,
@@ -571,7 +561,6 @@ def _scheme_payload_from_sections(
             "air_temperature_stations": [],
             "flow_stations": list(flow_station_seen.values()),
             "stage_stations": list(stage_station_seen.values()),
-            "reservoir": list(reservoir_catalog.values()),
         },
         "catchment_forcing_bindings": list(forcing_bindings.values()),
     }

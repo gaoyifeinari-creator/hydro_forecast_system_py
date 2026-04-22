@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from hydro_engine.core.context import ForecastTimeContext
 from hydro_engine.core.interfaces import IErrorUpdater
 from hydro_engine.core.timeseries import TimeSeries
@@ -27,6 +29,8 @@ class AR1ErrorUpdater(IErrorUpdater):
         time_context: ForecastTimeContext,
     ) -> TimeSeries:
         simulated._assert_compatible(observed)
+        if simulated.values.ndim != 1 or observed.values.ndim != 1:
+            raise ValueError("AR1ErrorUpdater currently supports 1-D deterministic series only")
         tc = time_context
         i_corr = simulated.get_index_by_time(tc.correction_start_time)
         i_t0 = simulated.get_index_by_time(tc.forecast_start_time)
@@ -34,18 +38,19 @@ class AR1ErrorUpdater(IErrorUpdater):
             raise ValueError("correction window invalid: correction_start after forecast_start")
 
         residuals: list[float] = []
+        obs_arr = np.asarray(observed.values, dtype=np.float64)
+        sim_arr = np.asarray(simulated.values, dtype=np.float64)
         for i in range(i_corr, i_t0):
-            o = observed.values[i]
-            s = simulated.values[i]
-            if isinstance(o, float) and math.isnan(o):
+            o = float(obs_arr[i])
+            s = float(sim_arr[i])
+            if math.isnan(o):
                 continue
             residuals.append(o - s)
 
         bias = sum(residuals) / len(residuals) if residuals else 0.0
         bias *= self.decay_factor
 
-        out = list(simulated.values)
-        for i in range(i_t0, len(out)):
-            out[i] = out[i] + bias
+        out = np.array(sim_arr, dtype=np.float64, copy=True)
+        out[i_t0 :] = out[i_t0 :] + bias
 
         return TimeSeries(simulated.start_time, simulated.time_step, out)

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 
+import numpy as np
+
 from hydro_engine.core.timeseries import TimeSeries
 
 
@@ -39,6 +41,19 @@ def _make_time_delta(time_type: TimeType, step_size: int) -> timedelta:
     if time_type is TimeType.DAY:
         return timedelta(days=step_size)
     raise ValueError(f"Unsupported time_type: {time_type}")
+
+
+def native_time_delta(*, time_type: TimeType | str, step_size: int) -> timedelta:
+    """
+    引擎与应用层共用的「原生时间步长」：由 ``time_type`` + ``step_size`` 唯一确定 ``timedelta``。
+
+    ``time_type`` 可为 :class:`TimeType` 或 ``Minute``/``Hour``/``Day``（大小写不敏感，与 JSON 一致）。
+    """
+    if isinstance(time_type, TimeType):
+        tt = time_type
+    else:
+        tt = parse_time_type(str(time_type))
+    return _make_time_delta(tt, int(step_size))
 
 
 @dataclass(frozen=True)
@@ -115,7 +130,7 @@ class ForecastTimeContext:
         return TimeSeries(
             start_time=self.warmup_start_time,
             time_step=self.time_delta,
-            values=[fill_value] * self.step_count,
+            values=np.full((self.step_count,), float(fill_value), dtype=np.float64),
         )
 
     @classmethod

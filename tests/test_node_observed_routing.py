@@ -130,20 +130,20 @@ class TestNodeObservedRouting(unittest.TestCase):
 
     def test_only_for_comparison_no_blend(self) -> None:
         result, w = self._run(use_observed_for_routing=False)
-        self.assertEqual(result.reach_flows["R1"].values, self.sim_values)
+        self.assertEqual(result.reach_flows["R1"].values.tolist(), list(self.sim_values))
         self.assertIn("N1", result.node_observed_flows)
-        self.assertEqual(result.node_observed_flows["N1"].values, self.obs_values)
+        self.assertEqual(result.node_observed_flows["N1"].values.tolist(), list(self.obs_values))
 
     def test_use_observed_for_routing_blend(self) -> None:
         result, w = self._run(use_observed_for_routing=True)
         expected = [10.0, 20.0, 3.0, 4.0, 5.0]
-        self.assertEqual(result.reach_flows["R1"].values, expected)
+        self.assertEqual(result.reach_flows["R1"].values.tolist(), expected)
         self.assertIn("N1", result.node_observed_flows)
-        self.assertEqual(result.node_observed_flows["N1"].values, self.obs_values)
+        self.assertEqual(result.node_observed_flows["N1"].values.tolist(), list(self.obs_values))
 
     def test_all_nan_observed_fallback_to_simulated(self) -> None:
         result, w = self._run(use_observed_for_routing=True, observed_all_nan=True)
-        self.assertEqual(result.reach_flows["R1"].values, self.sim_values)
+        self.assertEqual(result.reach_flows["R1"].values.tolist(), list(self.sim_values))
         self.assertIn("N1", result.node_observed_flows)
         # should warn
         self.assertTrue(any("all NaN" in str(x.message) for x in w))

@@ -24,7 +24,7 @@ class TestReservoirDispatchModel(unittest.TestCase):
         )
 
         out = node._compute_simulated_outflows(inflow)
-        self.assertEqual(out["R3"].values, inflow.values)
+        self.assertTrue((out["R3"].values == inflow.values).all())
 
 
 if __name__ == "__main__":

@@ -115,15 +115,17 @@ class XinanjiangCSRunoffModel(IHydrologicalModel):
         self.debug_rows.clear()
         rain_ts = forcing.require(ForcingKind.PRECIPITATION)
         pet_ts = forcing.require(ForcingKind.POTENTIAL_EVAPOTRANSPIRATION)
+        if rain_ts.values.ndim != 1 or pet_ts.values.ndim != 1:
+            raise ValueError("XinanjiangCSRunoffModel requires 1-D forcing series")
         if (
             rain_ts.start_time != pet_ts.start_time
             or rain_ts.time_step != pet_ts.time_step
-            or len(rain_ts.values) != len(pet_ts.values)
+            or rain_ts.time_steps != pet_ts.time_steps
         ):
             raise ValueError("PRECIPITATION and POTENTIAL_EVAPOTRANSPIRATION series must align")
 
-        p_input = [float(v) for v in rain_ts.values]
-        e_input = [float(v) for v in pet_ts.values]
+        p_input = [float(v) for v in rain_ts.values.tolist()]
+        e_input = [float(v) for v in pet_ts.values.tolist()]
         num_calc = len(p_input)
 
         wm = [self.params.wum, self.params.wlm, self.params.wdm]

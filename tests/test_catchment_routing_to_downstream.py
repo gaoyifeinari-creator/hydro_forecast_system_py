@@ -76,8 +76,8 @@ class TestCatchmentRoutingToDownstream(unittest.TestCase):
 
         result = CalculationEngine().run(scheme, catchment_forcing, time_context)
 
-        self.assertEqual(result.reach_flows["R1"].values, [0.0] * 5)
-        self.assertEqual(result.node_total_inflows["N2"].values, runoff_values)
+        self.assertEqual(result.reach_flows["R1"].values.tolist(), [0.0] * 5)
+        self.assertEqual(result.node_total_inflows["N2"].values.tolist(), runoff_values)
 
 
 if __name__ == "__main__":

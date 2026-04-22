@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Iterable, Iterator, Mapping, Set, Tuple
+
+import numpy as np
 
 from hydro_engine.core.timeseries import TimeSeries
 
@@ -121,3 +124,22 @@ def validate_station_package_covers_binding(
         raise ValueError(
             f"Station '{station_id}' does not provide forcing '{kind.value}' in its package"
         )
+
+
+def forcing_single_kind_ensemble_matrix(
+    kind: ForcingKind,
+    *,
+    start_time: datetime,
+    time_step: timedelta,
+    scenario_matrix: np.ndarray,
+) -> ForcingData:
+    """
+    将 ``(num_scenarios, time_steps)`` 的 NumPy 矩阵封装为单要素 :class:`ForcingData`。
+
+    与「为每个情景单独建 :class:`TimeSeries` 再列表持有」相比，避免 Python 层按情景循环，
+    便于后续产流/演进模型一次性接收张量。
+    """
+    arr = np.asarray(scenario_matrix, dtype=np.float64, order="C")
+    if arr.ndim != 2:
+        raise ValueError("scenario_matrix must have shape (num_scenarios, time_steps)")
+    return ForcingData.single(kind, TimeSeries(start_time, time_step, arr))

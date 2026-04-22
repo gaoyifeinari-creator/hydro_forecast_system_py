@@ -94,6 +94,9 @@ class TestJsonConfigPipeline(unittest.TestCase):
         self.assertIn("node_total_inflows", output)
         self.assertIn("time_context", output)
         self.assertIn("display_results", output)
+        for _k, disp in output["display_results"].items():
+            self.assertIsInstance(disp, dict)
+            self.assertIn("deterministic", disp)
         self.assertIn("R5", output["reach_flows"])
         # 当前示例的分流节点参数可能使得旁路分量为 0（即 `R5` 全为 0）。
         # 这里更稳健地断言主干河道 `R4` 必须产生正流量。

@@ -40,6 +40,7 @@ from hydro_engine.io.calculation_app_data_loader import (
     load_rain_flow_for_calculation,
     read_config,
 )
+from hydro_engine.io.scheme_config_utils import select_scheme_dict_exact
 
 __all__ = [
     "DEFAULT_FLOOD_JDBC_CONFIG",
@@ -77,11 +78,11 @@ def write_temp_config_with_periods(
     if not data.get("schemes"):
         raise ValueError("配置缺少 schemes")
 
-    target = None
-    for s in data["schemes"]:
-        if str(s.get("time_type")) == str(time_type) and int(s.get("step_size")) == int(step_size):
-            target = s
-            break
+    schemes_raw = data.get("schemes") or []
+    schemes_list = [s for s in schemes_raw if isinstance(s, dict)]
+    target = select_scheme_dict_exact(
+        schemes_list, time_type=str(time_type), step_size=int(step_size)
+    )
     if target is None:
         raise ValueError(f"未找到匹配方案：time_type={time_type}, step_size={step_size}")
 

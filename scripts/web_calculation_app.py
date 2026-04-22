@@ -67,6 +67,11 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from hydro_engine.io.calculation_app_data_loader import DEFAULT_FLOOD_JDBC_CONFIG
+from hydro_engine.io.scheme_config_utils import (
+    read_schemes_list,
+    select_scheme_dict_exact,
+    select_scheme_dict_smallest_step,
+)
 
 from calculation_pipeline_runner import (
     _infer_debug_table_columns,
@@ -516,28 +521,10 @@ def _load_best_scheme_for_time_type(config_path: str, time_type: str) -> Optiona
     与桌面端一致：同一 time_type 下取 `step_size` 最小的 scheme 作为默认填充值。
     """
     cfg = str(config_path or "").strip()
-    tt = str(time_type or "").strip()
     if not cfg or not Path(cfg).is_file():
         return None
-    try:
-        data = json.loads(Path(cfg).read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    schemes = data.get("schemes") or []
-    candidates: List[Dict[str, Any]] = []
-    for s in schemes:
-        if str(s.get("time_type") or "").strip() != tt:
-            continue
-        try:
-            step = int(s.get("step_size", 999999))
-        except Exception:
-            step = 999999
-        if step < 1:
-            continue
-        candidates.append(s)
-    if not candidates:
-        return None
-    return min(candidates, key=lambda x: int(x.get("step_size", 999999)))
+    schemes = read_schemes_list(cfg)
+    return select_scheme_dict_smallest_step(schemes, time_type=str(time_type or ""))
 
 
 def _load_scheme_for_time_scale(config_path: str, time_type: str, step_size: int) -> Optional[Dict[str, Any]]:
@@ -545,27 +532,14 @@ def _load_scheme_for_time_scale(config_path: str, time_type: str, step_size: int
     按 time_type + step_size 精确匹配 scheme。
     """
     cfg = str(config_path or "").strip()
-    tt = str(time_type or "").strip()
+    if not cfg or not Path(cfg).is_file():
+        return None
     try:
         sz = int(step_size)
     except Exception:
         return None
-    if not cfg or not Path(cfg).is_file():
-        return None
-    try:
-        data = json.loads(Path(cfg).read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    for s in data.get("schemes") or []:
-        if str(s.get("time_type") or "").strip() != tt:
-            continue
-        try:
-            if int(s.get("step_size", -999999)) != sz:
-                continue
-        except Exception:
-            continue
-        return s
-    return None
+    schemes = read_schemes_list(cfg)
+    return select_scheme_dict_exact(schemes, time_type=str(time_type or ""), step_size=sz)
 
 
 def _scheme_time_axis_defaults(config_path: str, time_type: str) -> Dict[str, Any]:

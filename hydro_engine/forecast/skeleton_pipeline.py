@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
 from hydro_engine.core.forcing import ForcingData, ForcingKind
@@ -96,9 +97,9 @@ def _build_forecast_forcing(
                 "预报期需要 PET：请提供 forecast_pet（TimeSeries）、"
                 "或在历史强迫中包含 PET 以便用末值常数延拓"
             )
-        if len(pet_ts.values) != len(rain_values):
+        if pet_ts.time_steps != len(rain_values):
             raise ValueError(
-                f"预报 PET 长度 {len(pet_ts.values)} 与降雨长度 {len(rain_values)} 不一致"
+                f"预报 PET 长度 {pet_ts.time_steps} 与降雨长度 {len(rain_values)} 不一致"
             )
         if pet_ts.start_time != forecast_start or pet_ts.time_step != time_step:
             raise ValueError("预报 PET 的 start_time / time_step 必须与预报降雨轴一致")
@@ -114,9 +115,9 @@ def _build_forecast_forcing(
 
 def _last_hist_pet_value(historical_forcing: ForcingData) -> Optional[float]:
     pet = historical_forcing.get(ForcingKind.POTENTIAL_EVAPOTRANSPIRATION)
-    if pet is None or not pet.values:
+    if pet is None:
         return None
-    return float(pet.values[-1])
+    return float(np.asarray(pet.values, dtype=np.float64).reshape(-1)[-1])
 
 
 def run_forecast_pipeline(
@@ -170,11 +171,11 @@ def run_forecast_pipeline(
             last_hist_pet=last_pet,
         )
         out_ts = branch.run(frc)
-        if len(out_ts.values) != len(rseries):
+        if out_ts.time_steps != len(rseries):
             raise RuntimeError(
-                f"情景 {name}: 模型输出长度 {len(out_ts.values)} 与预报步数 {len(rseries)} 不一致"
+                f"情景 {name}: 模型输出长度 {out_ts.time_steps} 与预报步数 {len(rseries)} 不一致"
             )
-        flows[name] = [float(x) for x in out_ts.values]
+        flows[name] = [float(x) for x in out_ts.values.tolist()]
 
     return pd.DataFrame(
         {

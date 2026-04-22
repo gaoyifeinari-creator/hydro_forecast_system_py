@@ -160,7 +160,7 @@ def rolling_forecast_evaluation() -> None:
             for sid, pkg in station_packages.items():
                 new_map = {}
                 for kind, series in pkg.as_mapping().items():
-                    vals = list(series.values)
+                    vals = series.values.tolist()
                     window_vals = vals[warmup_steps : warmup_steps + win_total_steps]
                     new_map[kind] = TimeSeries(
                         start_time=warmup_start, time_step=STEP_DELTA, values=window_vals
@@ -170,7 +170,7 @@ def rolling_forecast_evaluation() -> None:
 
             win_obs_flows: Dict[str, TimeSeries] = {}
             for sid, series in observed_flows.items():
-                vals = list(series.values)
+                vals = series.values.tolist()
                 win_obs_flows[sid] = TimeSeries(
                     start_time=warmup_start, time_step=STEP_DELTA,
                     values=vals[warmup_steps : warmup_steps + win_total_steps],
@@ -228,8 +228,8 @@ def rolling_forecast_evaluation() -> None:
 
                 if obs_sid and obs_sid in win_obs_flows:
                     obs_arr = np.array(
-                        list(win_obs_flows[obs_sid].values)[fc_idx : fc_idx + fc_steps],
-                        dtype=np.float64
+                        win_obs_flows[obs_sid].values.tolist()[fc_idx : fc_idx + fc_steps],
+                        dtype=np.float64,
                     )
                 else:
                     obs_arr = np.full(fc_steps, np.nan, dtype=np.float64)

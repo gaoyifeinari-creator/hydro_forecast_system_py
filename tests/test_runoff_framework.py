@@ -75,7 +75,7 @@ class TestRunoffFrameworkAdaptation(unittest.TestCase):
                 kinds_seen.add(model.required_inputs())
                 sc = SubCatchment(id="C", runoff_model=model)
                 out = sc.generate_runoff(fd)
-                self.assertEqual(len(out.values), self.n)
+                self.assertEqual(out.time_steps, self.n)
 
         self.assertEqual(len(kinds_seen), 2)
 

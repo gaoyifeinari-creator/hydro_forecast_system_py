@@ -56,8 +56,8 @@ class TestHydrologicalModels(unittest.TestCase):
             ]
         )
         output = model.run(forcing)
-        self.assertEqual(len(output.values), len(self.series_p.values))
-        self.assertTrue(all(v >= 0 for v in output.values))
+        self.assertEqual(output.time_steps, self.series_p.time_steps)
+        self.assertTrue(bool((output.values >= 0).all()))
 
     def test_tank_runoff_model(self) -> None:
         model = TankRunoffModel(
@@ -71,16 +71,16 @@ class TestHydrologicalModels(unittest.TestCase):
         )
         forcing = ForcingData.single(ForcingKind.PRECIPITATION, self.series_p)
         output = model.run(forcing)
-        self.assertEqual(len(output.values), len(self.series_p.values))
-        self.assertTrue(all(v >= 0 for v in output.values))
+        self.assertEqual(output.time_steps, self.series_p.time_steps)
+        self.assertTrue(bool((output.values >= 0).all()))
 
     def test_muskingum_routing_model(self) -> None:
         model = MuskingumRoutingModel(k_hours=3.0, x=0.2)
         forcing = ForcingData.single(ForcingKind.ROUTING_INFLOW, self.series_p)
         output = model.run(forcing)
-        self.assertEqual(len(output.values), len(self.series_p.values))
-        self.assertTrue(all(v >= 0 for v in output.values))
-        self.assertLessEqual(max(output.values), max(self.series_p.values) * 1.05)
+        self.assertEqual(output.time_steps, self.series_p.time_steps)
+        self.assertTrue(bool((output.values >= 0).all()))
+        self.assertLessEqual(float(output.values.max()), max(self.series_p.values) * 1.05)
 
     def test_snowmelt_runoff_model(self) -> None:
         model = SnowmeltRunoffModel()
@@ -94,7 +94,7 @@ class TestHydrologicalModels(unittest.TestCase):
             ]
         )
         out = model.run(forcing)
-        self.assertEqual(len(out.values), len(self.series_p.values))
+        self.assertEqual(out.time_steps, self.series_p.time_steps)
 
 
 if __name__ == "__main__":

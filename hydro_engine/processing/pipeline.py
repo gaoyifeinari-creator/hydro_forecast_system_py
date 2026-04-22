@@ -175,7 +175,7 @@ class CatchmentDataSynthesizer:
         except ValueError as exc:
             raise ValueError(
                 f"Failed to preprocess time series for kind='{kind.value}' "
-                f"(start={ts.start_time.isoformat()}, step={ts.time_step}, len={len(ts.values)}): {exc}"
+                f"(start={ts.start_time.isoformat()}, step={ts.time_step}, len={ts.time_steps}): {exc}"
             ) from exc
 
     def _build_monthly_evap_series(

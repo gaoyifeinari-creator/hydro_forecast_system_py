@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple
 
+import numpy as np
+
 from hydro_engine.core.forcing import ForcingData, ForcingKind
 from hydro_engine.core.timeseries import TimeSeries
 
@@ -31,10 +33,10 @@ class SpatialAggregator:
             raise ValueError("series_list must not be empty")
         ref = series_list[0]
         for s in series_list[1:]:
-            if s.start_time != ref.start_time or s.time_step != ref.time_step or len(s.values) != len(
-                ref.values
-            ):
+            if s.start_time != ref.start_time or s.time_step != ref.time_step or s.time_steps != ref.time_steps:
                 raise ValueError("TimeSeries inputs must align for spatial aggregation")
+            if s.values.ndim != 1 or ref.values.ndim != 1:
+                raise ValueError("SpatialAggregator currently requires 1-D station series")
 
     @classmethod
     def aggregate_time_series(
@@ -56,13 +58,13 @@ class SpatialAggregator:
         ws = weights or {}
 
         # 内部默认把 NaN 当作缺测：聚合时忽略该站点该时刻
-        for i in range(len(ref.values)):
+        for i in range(ref.time_steps):
             numer = 0.0
             denom = 0.0
             any_valid = False
             for sid, ts in series_by_station.items():
                 v = float(ts.values[i])
-                if isinstance(ts.values[i], float) and ts.values[i] != ts.values[i]:  # NaN check
+                if np.isnan(v):
                     continue
                 any_valid = True
                 w = float(ws.get(sid, 1.0))

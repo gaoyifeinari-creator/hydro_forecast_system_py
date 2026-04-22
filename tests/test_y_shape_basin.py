@@ -5,6 +5,8 @@ import _sys_path  # noqa: F401
 import unittest
 from datetime import datetime, timedelta
 
+import numpy as np
+
 from hydro_engine.core.context import ForecastTimeContext, TimeType
 from hydro_engine.core.forcing import ForcingData, ForcingKind
 from hydro_engine.core.timeseries import TimeSeries
@@ -113,7 +115,7 @@ class TestYShapeBasin(unittest.TestCase):
         n6_inflow = result.node_total_inflows["N6"].values
         print("Node6 inflow:", n6_inflow)
 
-        self.assertEqual(bypass_flow, n6_inflow)
+        self.assertTrue(np.array_equal(np.asarray(bypass_flow), np.asarray(n6_inflow)))
 
 
 if __name__ == "__main__":

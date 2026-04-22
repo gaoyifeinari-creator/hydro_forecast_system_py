@@ -36,15 +36,17 @@ class SnowmeltRunoffModel(IHydrologicalModel):
         t_air = forcing.require(ForcingKind.AIR_TEMPERATURE)
         snow = forcing.require(ForcingKind.SNOW_DEPTH)
         for a, b in ((p, t_air), (p, snow), (t_air, snow)):
+            if a.values.ndim != 1 or b.values.ndim != 1:
+                raise ValueError("SnowmeltRunoffModel requires 1-D inputs")
             if (
                 a.start_time != b.start_time
                 or a.time_step != b.time_step
-                or len(a.values) != len(b.values)
+                or a.time_steps != b.time_steps
             ):
                 raise ValueError("Snowmelt inputs must share the same time grid")
 
         out: List[float] = []
-        for rain, temp, sd in zip(p.values, t_air.values, snow.values):
+        for rain, temp, sd in zip(p.values.tolist(), t_air.values.tolist(), snow.values.tolist()):
             melt = max(0.0, temp - self.temperature_melt_threshold) * self.melt_degree_factor * sd
             q = self.rain_runoff_factor * rain + melt
             out.append(max(0.0, q))

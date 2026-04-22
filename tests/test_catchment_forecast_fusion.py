@@ -98,7 +98,7 @@ class TestCatchmentForecastFusion(unittest.TestCase):
         )
 
         ts = station_packages[virtual_id].require(ForcingKind.PRECIPITATION)
-        self.assertEqual(ts.values, values_b)
+        self.assertEqual(ts.values.tolist(), values_b)
 
     def test_json_rule_to_binding_specs_virtual_ids(self) -> None:
         scheme = ForecastingScheme()

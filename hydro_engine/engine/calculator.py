@@ -35,7 +35,7 @@ def _validate_station_data_native_scale(
                     f"Catchment {cid} forcing {kind.value}: start_time must equal "
                     f"warmup_start_time {time_context.warmup_start_time!r}"
                 )
-            if len(series.values) != time_context.step_count:
+            if series.time_steps != time_context.step_count:
                 raise ValueError(
                     f"Catchment {cid} forcing {kind.value}: length must equal step_count "
                     f"{time_context.step_count}"
@@ -53,11 +53,11 @@ def _validate_station_data_native_scale(
             raise ValueError(
                 f"Observed flow {sid}: cannot slice to context "
                 f"[{time_context.warmup_start_time!r}, {time_context.end_time!r}). "
-                f"Original start={series.start_time!r}, step={series.time_step!r}, len={len(series.values)}."
+                f"Original start={series.start_time!r}, step={series.time_step!r}, len={series.time_steps}."
             ) from exc
-        if len(sliced.values) != time_context.step_count:
+        if sliced.time_steps != time_context.step_count:
             raise ValueError(
-                f"Observed flow {sid}: sliced length {len(sliced.values)} != step_count {time_context.step_count}"
+                f"Observed flow {sid}: sliced length {sliced.time_steps} != step_count {time_context.step_count}"
             )
 
 

@@ -4,10 +4,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+import numpy as np
+
 from hydro_engine.core.context import ForecastTimeContext
 from hydro_engine.core.interfaces import IErrorUpdater
 from hydro_engine.core.timeseries import TimeSeries
-import math
 
 
 @dataclass
@@ -75,7 +76,8 @@ class AbstractNode(ABC):
             if self.use_observed_for_routing_after_forecast:
                 override_start = time_context.end_time
             else:
-                override_start = time_context.forecast_start_time
+                # 与 ``blend(..., forecast_start - step)`` 一致：起报时刻所在步仍用实测，模拟从下一格点起算。
+                override_start = time_context.forecast_start_time + time_context.time_delta
 
             # forecast 段为空：输出完全使用观测值（不需要任何调度计算）
             if override_start >= time_context.end_time:
@@ -90,9 +92,10 @@ class AbstractNode(ABC):
             out: Dict[str, TimeSeries] = {rid: obs for rid in sim_map.keys()}
             for rid, sim_ts in sim_map.items():
                 start_idx = obs.get_index_by_time(sim_ts.start_time)
-                new_values = list(out[rid].values)
-                new_values[start_idx : start_idx + len(sim_ts.values)] = sim_ts.values
-                out[rid] = type(obs)(
+                new_values = np.array(out[rid].values, dtype=np.float64, copy=True).reshape(-1)
+                seg = np.asarray(sim_ts.values, dtype=np.float64).reshape(-1)
+                new_values[start_idx : start_idx + sim_ts.time_steps] = seg
+                out[rid] = TimeSeries(
                     start_time=obs.start_time,
                     time_step=obs.time_step,
                     values=new_values,
@@ -125,10 +128,7 @@ class AbstractNode(ABC):
 
     @staticmethod
     def _is_all_nan(ts: TimeSeries) -> bool:
-        for v in ts.values:
-            if not (isinstance(v, float) and math.isnan(v)):
-                return False
-        return True
+        return bool(np.all(np.isnan(np.asarray(ts.values, dtype=np.float64))))
 
     @abstractmethod
     def _compute_simulated_outflows(self, total_inflow: TimeSeries) -> Dict[str, TimeSeries]:

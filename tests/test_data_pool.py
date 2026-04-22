@@ -41,7 +41,7 @@ class TestDataPool(unittest.TestCase):
         )
 
         # boundary = forecast_start - 1step, so indices 0,1 take obs; 2..4 take fcst
-        self.assertEqual(combined.values, [1.0, 2.0, 30.0, 40.0, 50.0])
+        self.assertEqual(combined.values.tolist(), [1.0, 2.0, 30.0, 40.0, 50.0])
 
     def test_add_get_catchment_forcing_pool(self) -> None:
         start = datetime(2026, 1, 1, 0, 0, 0)

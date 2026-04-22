@@ -76,14 +76,17 @@ class ReservoirNode(AbstractNode):
             return {self.outgoing_reach_ids[0]: total_inflow}
 
         raw_release = total_inflow.scale(self.inflow_attenuation)
+        if raw_release.values.ndim != 1:
+            raise ValueError("ReservoirNode attenuation path requires 1-D inflow series")
         min_release = self.operation_constraints.min_release
         max_release = self.operation_constraints.max_release
         if min_release > max_release:
             raise ValueError("operation_constraints.min_release must be <= max_release")
 
+        clipped = [min(max(float(v), min_release), max_release) for v in raw_release.values.tolist()]
         constrained_release = TimeSeries(
             start_time=raw_release.start_time,
             time_step=raw_release.time_step,
-            values=[min(max(v, min_release), max_release) for v in raw_release.values],
+            values=clipped,
         )
         return {self.outgoing_reach_ids[0]: constrained_release}

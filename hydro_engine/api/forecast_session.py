@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
 import pandas as pd
 
 from hydro_engine.core.context import ForecastTimeContext, TimeType, parse_time_type
@@ -432,10 +433,10 @@ class ForecastSession:
         Returns:
             TimeSeries
         """
-        # 处理 NaN
-        values = series.values.tolist()
-        values = [float("nan") if pd.isna(v) else float(v) for v in values]
-        
+        # 处理 NaN → float64 向量
+        raw = [float("nan") if pd.isna(v) else float(v) for v in series.tolist()]
+        values = np.asarray(raw, dtype=np.float64)
+
         # 从 series 推断 time_step
         if len(series) < 2:
             time_step = self.time_context.time_delta if self.time_context else timedelta(hours=1)

@@ -40,11 +40,13 @@ class TankRunoffModel(IHydrologicalModel):
     def run(self, forcing: ForcingData) -> TimeSeries:
         self._validate_parameters()
         input_series = forcing.require(ForcingKind.PRECIPITATION)
+        if input_series.values.ndim != 1:
+            raise ValueError("TankRunoffModel requires 1-D precipitation series")
         upper = self.state.upper_storage
         lower = self.state.lower_storage
         runoff_values: List[float] = []
 
-        for rainfall in input_series.values:
+        for rainfall in input_series.values.tolist():
             effective_rain = max(0.0, rainfall * (1.0 - self.params.evap_coeff))
             upper += effective_rain
             upper_out = upper * self.params.upper_outflow_coeff

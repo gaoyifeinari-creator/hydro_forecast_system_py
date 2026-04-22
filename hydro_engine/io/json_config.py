@@ -7,9 +7,12 @@ from pathlib import Path
 import math
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
+import numpy as np
+
 from hydro_engine.core.context import (
     ForecastTimeContext,
     TimeType,
+    native_time_delta,
     parse_time_type,
 )
 from hydro_engine.core.forcing import (
@@ -20,7 +23,7 @@ from hydro_engine.core.forcing import (
 )
 from hydro_engine.core.data_pool import DataPool
 from hydro_engine.core.interfaces import IHydrologicalModel, IErrorUpdater
-from hydro_engine.core.timeseries import TimeSeries
+from hydro_engine.core.timeseries import TimeSeries, summarize_for_display_json
 from hydro_engine.domain.catchment import SubCatchment
 from hydro_engine.domain.nodes.base import AbstractNode, NodeCorrectionConfig
 from hydro_engine.domain.nodes.cross_section import CrossSectionNode
@@ -329,13 +332,7 @@ def _parse_time_axis_dict(
 
 
 def _make_timedelta_from_type_step(time_type: TimeType, step_size: int) -> timedelta:
-    if time_type is TimeType.MINUTE:
-        return timedelta(minutes=step_size)
-    if time_type is TimeType.HOUR:
-        return timedelta(hours=step_size)
-    if time_type is TimeType.DAY:
-        return timedelta(days=step_size)
-    raise ValueError(f"Unsupported time_type: {time_type}")
+    return native_time_delta(time_type=time_type, step_size=step_size)
 
 
 def _require_scheme_keys(scheme_data: Dict[str, Any]) -> None:
@@ -522,6 +519,7 @@ def load_scheme_from_json(
             routing_model=routing_model,
         )
         scheme.add_reach(reach)
+    _bind_node_reaches_from_edges(scheme)
 
     # ------------------------------------------------------------
     # Catchment 拓扑推导：配置层面尽量只保留单向关联。
@@ -614,7 +612,7 @@ def _validate_series_in_context(series: TimeSeries, ctx: ForecastTimeContext) ->
         raise ValueError("Series start_time must equal time_axis.warmup_start_time")
     if series.time_step != ctx.time_delta:
         raise ValueError("Series time_step must equal ForecastTimeContext.time_delta (native scale)")
-    if len(series.values) != ctx.step_count:
+    if series.time_steps != ctx.step_count:
         raise ValueError("Series length does not match ForecastTimeContext.step_count")
 
 
@@ -686,9 +684,9 @@ def apply_realtime_forecast_observed_meteorology_cutoff(
             ts = patched.get(kind)
             if ts is None:
                 continue
-            vals = list(ts.values)
-            if forecast_start_idx < len(vals):
-                vals[forecast_start_idx:] = [0.0] * (len(vals) - forecast_start_idx)
+            vals = np.array(ts.values, dtype=np.float64, copy=True)
+            if forecast_start_idx < ts.time_steps:
+                vals[..., forecast_start_idx:] = 0.0
             patched = patched.with_series(
                 kind,
                 TimeSeries(start_time=ts.start_time, time_step=ts.time_step, values=vals),
@@ -822,6 +820,11 @@ def run_calculation_from_json(
     return payload
 
 
+def _engine_series_to_json_list(series: TimeSeries) -> Any:
+    """完整引擎序列 JSON：1D 为列表；2D 为嵌套列表（集合维 × 时间）。"""
+    return series.values.tolist()
+
+
 def _serialize_result(
     scheme: ForecastingScheme, result: CalculationResult
 ) -> Dict[str, Any]:
@@ -829,23 +832,26 @@ def _serialize_result(
     payload: Dict[str, Any] = {
         "topological_order": scheme.topological_order(),
         "node_total_inflows": {
-            node_id: series.values for node_id, series in result.node_total_inflows.items()
+            node_id: _engine_series_to_json_list(series) for node_id, series in result.node_total_inflows.items()
         },
         "node_outflows": {
-            node_id: series.values for node_id, series in result.node_outflows.items()
+            node_id: _engine_series_to_json_list(series) for node_id, series in result.node_outflows.items()
         },
         "node_observed_flows": {
-            node_id: series.values for node_id, series in result.node_observed_flows.items()
+            node_id: _engine_series_to_json_list(series)
+            for node_id, series in result.node_observed_flows.items()
         },
         "catchment_runoffs": {
-            catchment_id: series.values for catchment_id, series in result.catchment_runoffs.items()
+            catchment_id: _engine_series_to_json_list(series)
+            for catchment_id, series in result.catchment_runoffs.items()
         },
         "catchment_routed_flows": {
-            catchment_id: series.values for catchment_id, series in result.catchment_routed_flows.items()
+            catchment_id: _engine_series_to_json_list(series)
+            for catchment_id, series in result.catchment_routed_flows.items()
         },
         "catchment_debug_traces": result.catchment_debug_traces,
         "reach_flows": {
-            reach_id: series.values for reach_id, series in result.reach_flows.items()
+            reach_id: _engine_series_to_json_list(series) for reach_id, series in result.reach_flows.items()
         },
     }
     if tc is not None:
@@ -860,7 +866,7 @@ def _serialize_result(
             "end_time": tc.end_time.isoformat(),
         }
         payload["display_results"] = {
-            k: v.values for k, v in result.get_display_results().items()
+            k: summarize_for_display_json(v) for k, v in result.get_display_results().items()
         }
     return payload
 
@@ -942,8 +948,9 @@ def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
     common_kwargs: Dict[str, Any] = {
         "id": node_data["id"],
         "name": node_data.get("name", str(node_data["id"])),
-        "incoming_reach_ids": node_data.get("incoming_reach_ids", []),
-        "outgoing_reach_ids": node_data.get("outgoing_reach_ids", []),
+        # 拓扑单一真相：节点入/出边由 reaches 自动推导，不再要求在 nodes 中重复维护。
+        "incoming_reach_ids": [],
+        "outgoing_reach_ids": [],
         "local_catchment_ids": node_data.get("local_catchment_ids", []),
         # 节点一级实测元数据（展示/比对/接力）
         "observed_station_id": observed_station_id,
@@ -1007,6 +1014,27 @@ def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
             **common_kwargs,
         )
     raise ValueError(f"Unsupported node type: {node_type}")
+
+
+def _bind_node_reaches_from_edges(scheme: ForecastingScheme) -> None:
+    """
+    以 reaches 为单一拓扑真相，回填每个节点的 incoming/outgoing reach 列表。
+    """
+    incoming: Dict[str, List[str]] = {str(nid): [] for nid in scheme.nodes.keys()}
+    outgoing: Dict[str, List[str]] = {str(nid): [] for nid in scheme.nodes.keys()}
+
+    for rid, reach in scheme.reaches.items():
+        uid = str(reach.upstream_node_id)
+        did = str(reach.downstream_node_id)
+        if uid not in outgoing or did not in incoming:
+            # 理论上 add_reach 已校验；此处仅防御性保护。
+            raise ValueError(f"Reach '{rid}' references unknown node(s): {uid} -> {did}")
+        outgoing[uid].append(str(rid))
+        incoming[did].append(str(rid))
+
+    for nid, node in scheme.nodes.items():
+        node.incoming_reach_ids = incoming.get(str(nid), [])
+        node.outgoing_reach_ids = outgoing.get(str(nid), [])
 
 
 def _build_model(model_data: Dict[str, Any]) -> IHydrologicalModel:

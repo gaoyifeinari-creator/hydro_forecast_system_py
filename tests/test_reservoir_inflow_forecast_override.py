@@ -104,7 +104,7 @@ class TestReservoirInflowForecastOverride(unittest.TestCase):
         # forecast_start = start+1step，boundary = start
         # idx=0 使用模拟 inflow(100)；idx>=1 使用注入 observed inflow(200)
         expected_release = [50.0, 100.0, 100.0, 100.0, 100.0]
-        self.assertEqual(result.reach_flows["R2"].values, expected_release)
+        self.assertEqual(result.reach_flows["R2"].values.tolist(), expected_release)
 
     def test_missing_inflow_observed_warns_and_fallback_to_simulated(self) -> None:
         engine = CalculationEngine()
@@ -120,7 +120,7 @@ class TestReservoirInflowForecastOverride(unittest.TestCase):
             )
 
         expected_release = [50.0, 50.0, 50.0, 50.0, 50.0]
-        self.assertEqual(result.reach_flows["R2"].values, expected_release)
+        self.assertEqual(result.reach_flows["R2"].values.tolist(), expected_release)
         self.assertTrue(any("missing in observed_flows" in str(x.message) for x in w))
 
 

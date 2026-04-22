@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
+import numpy as np
 import pandas as pd
 
 from hydro_engine.core.context import ForecastTimeContext
@@ -51,9 +52,11 @@ def patch_catchment_scenario_precipitation(
     if p_ts is None:
         raise ValueError(f"子流域 {cid} 强迫中缺少 precipitation，无法注入情景面雨")
 
-    vals = list(p_ts.values)
+    if p_ts.values.ndim != 1:
+        raise ValueError("patch_catchment_scenario_precipitation requires 1-D precipitation series")
+    vals = np.array(p_ts.values, dtype=np.float64, copy=True)
     fs_idx = _forecast_start_index(time_context)
-    n_fore = len(vals) - fs_idx
+    n_fore = p_ts.time_steps - fs_idx
     if n_fore <= 0:
         raise ValueError("预报段步数为 0：请检查 time_context 与强迫序列长度")
 
@@ -70,7 +73,7 @@ def patch_catchment_scenario_precipitation(
             f"子流域 {cid}: 情景 CSV 首时刻 {t0_csv} 须等于引擎 forecast_start_time {t0_engine}"
         )
 
-    new_p_vals = vals[:fs_idx] + [float(x) for x in scen_vals]
+    new_p_vals = np.concatenate([vals[:fs_idx], np.asarray(scen_vals, dtype=np.float64)])
     new_fd = fd.with_series(
         ForcingKind.PRECIPITATION,
         TimeSeries(p_ts.start_time, p_ts.time_step, new_p_vals),
@@ -87,10 +90,10 @@ def patch_catchment_scenario_precipitation(
             raise ValueError(
                 f"子流域 {cid}: 情景数据含 pet，但合成强迫中缺少 potential_evapotranspiration，无法覆写"
             )
-        pet_full = list(pet_ts.values)
-        if len(pet_full) != len(new_p_vals):
+        pet_full = np.array(pet_ts.values, dtype=np.float64, copy=True)
+        if pet_full.shape[-1] != new_p_vals.shape[-1]:
             raise ValueError("PET 序列长度与降水序列长度不一致")
-        new_pet_vals = pet_full[:fs_idx] + [float(x) for x in pet_list]
+        new_pet_vals = np.concatenate([pet_full[:fs_idx], np.asarray(pet_list, dtype=np.float64)])
         new_fd = new_fd.with_series(
             ForcingKind.POTENTIAL_EVAPOTRANSPIRATION,
             TimeSeries(pet_ts.start_time, pet_ts.time_step, new_pet_vals),

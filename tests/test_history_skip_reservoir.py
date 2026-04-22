@@ -25,7 +25,7 @@ class CountingReservoirNode(ReservoirNode):
 
     def _compute_simulated_outflows(self, total_inflow: TimeSeries):
         self.last_input_start = total_inflow.start_time
-        self.last_input_len = len(total_inflow.values)
+        self.last_input_len = total_inflow.time_steps
         return super()._compute_simulated_outflows(total_inflow)
 
 
@@ -117,7 +117,7 @@ class TestHistorySkipReservoir(unittest.TestCase):
         # 输出历史（<=forecast_start）使用 observed：[10,20,...]
         # 输出 forecast 后段（>forecast_start）使用 simulated：[3,4,5]
         expected = [10.0, 20.0, 3.0, 4.0, 5.0]
-        self.assertEqual(result.reach_flows["R2"].values, expected)
+        self.assertEqual(result.reach_flows["R2"].values.tolist(), expected)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import math
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import pandas as pd
 
@@ -269,62 +269,20 @@ def build_catchment_precip_series(
             continue
 
         stations = precip_var.get("stations") or []
-        if not stations:
-            out[catchment_id] = [0.0] * len(times)
-            continue
-
-        weighted_sum = [0.0] * len(times)
-        weight_total = 0.0
-        valid_station_count = 0
-
-        for st_item in stations:
-            sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
-            if not sid:
-                continue
-
-            try:
-                series = extract_station_series(
-                    rain_df,
-                    sid,
-                    times,
-                    value_col="V",
-                    fill_mode="zero",
-                )
-                w = float(st_item.get("weight", 1.0))
-                valid_station_count += 1
-                if w > 0:
-                    weight_total += w
-                    for i, v in enumerate(series):
-                        weighted_sum[i] += w * v
-            except Exception as exc:  # noqa: BLE001
-                warnings.append(f"流域 {catchment_id} 雨量站 {sid} 读取失败: {exc}")
-
-        if weight_total > 0:
-            out[catchment_id] = [v / weight_total for v in weighted_sum]
-        elif valid_station_count > 0:
-            # fallback: arithmetic mean when all weights are missing/invalid
-            eq_sum = [0.0] * len(times)
-            count = 0
-            for st_item in stations:
-                sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
-                if not sid:
-                    continue
-                try:
-                    series = extract_station_series(
-                        rain_df,
-                        sid,
-                        times,
-                        value_col="V",
-                        fill_mode="zero",
-                    )
-                    count += 1
-                    for i, v in enumerate(series):
-                        eq_sum[i] += v
-                except Exception:
-                    pass
-            out[catchment_id] = [v / max(count, 1) for v in eq_sum]
-        else:
-            out[catchment_id] = [0.0] * len(times)
+        tl = len(times)
+        out[catchment_id] = _weighted_catchment_precip_from_bindings(
+            catchment_id=catchment_id,
+            stations=stations,
+            times_len=tl,
+            get_station_precip_series=lambda sid: extract_station_series(
+                rain_df,
+                sid,
+                times,
+                value_col="V",
+                fill_mode="zero",
+            ),
+            warnings=warnings,
+        )
 
     return out, warnings
 
@@ -340,7 +298,9 @@ def _precip_values_from_station_package(
     ts = pkg.get(ForcingKind.PRECIPITATION)
     if ts is None:
         return [0.0] * times_len
-    vals = [float(x) for x in ts.values]
+    if ts.values.ndim != 1:
+        raise ValueError("station package precipitation must be 1-D for catchment precip extraction")
+    vals = [float(x) for x in ts.values.tolist()]
     if len(vals) != times_len:
         # 与网格约定不一致时兜底为占位零，避免前端崩溃
         if len(vals) < times_len:
@@ -348,6 +308,59 @@ def _precip_values_from_station_package(
         else:
             vals = vals[:times_len]
     return vals
+
+
+def _weighted_catchment_precip_from_bindings(
+    *,
+    catchment_id: str,
+    stations: list,
+    times_len: int,
+    get_station_precip_series: Callable[[str], List[float]],
+    warnings: List[str],
+) -> List[float]:
+    """
+    按 bindings 中降水站的权重聚合面雨量（核心逻辑，供 CSV 路径与 station_packages 路径共用）。
+    """
+    if not stations:
+        return [0.0] * times_len
+
+    weighted_sum = [0.0] * times_len
+    weight_total = 0.0
+    valid_station_count = 0
+
+    for st_item in stations:
+        sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+        if not sid:
+            continue
+        try:
+            series = get_station_precip_series(sid)
+            w = float(st_item.get("weight", 1.0))
+            valid_station_count += 1
+            if w > 0:
+                weight_total += w
+                for i, v in enumerate(series):
+                    weighted_sum[i] += w * v
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"流域 {catchment_id} 雨量站 {sid} 读取失败: {exc}")
+
+    if weight_total > 0:
+        return [v / weight_total for v in weighted_sum]
+    if valid_station_count > 0:
+        eq_sum = [0.0] * times_len
+        count = 0
+        for st_item in stations:
+            sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
+            if not sid:
+                continue
+            try:
+                series = get_station_precip_series(sid)
+                count += 1
+                for i, v in enumerate(series):
+                    eq_sum[i] += v
+            except Exception:
+                pass
+        return [v / max(count, 1) for v in eq_sum]
+    return [0.0] * times_len
 
 
 def build_catchment_precip_series_from_station_packages(
@@ -377,49 +390,15 @@ def build_catchment_precip_series_from_station_packages(
             continue
 
         stations = precip_var.get("stations") or []
-        if not stations:
-            out[catchment_id] = [0.0] * times_len
-            continue
-
-        weighted_sum = [0.0] * times_len
-        weight_total = 0.0
-        valid_station_count = 0
-
-        for st_item in stations:
-            sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
-            if not sid:
-                continue
-
-            try:
-                series = _precip_values_from_station_package(station_packages, sid, times_len)
-                w = float(st_item.get("weight", 1.0))
-                valid_station_count += 1
-                if w > 0:
-                    weight_total += w
-                    for i, v in enumerate(series):
-                        weighted_sum[i] += w * v
-            except Exception as exc:  # noqa: BLE001
-                warnings.append(f"流域 {catchment_id} 雨量站 {sid} 读取失败: {exc}")
-
-        if weight_total > 0:
-            out[catchment_id] = [v / weight_total for v in weighted_sum]
-        elif valid_station_count > 0:
-            eq_sum = [0.0] * times_len
-            count = 0
-            for st_item in stations:
-                sid = str(st_item.get("id") or st_item.get("station_id") or "").strip()
-                if not sid:
-                    continue
-                try:
-                    series = _precip_values_from_station_package(station_packages, sid, times_len)
-                    count += 1
-                    for i, v in enumerate(series):
-                        eq_sum[i] += v
-                except Exception:
-                    pass
-            out[catchment_id] = [v / max(count, 1) for v in eq_sum]
-        else:
-            out[catchment_id] = [0.0] * times_len
+        out[catchment_id] = _weighted_catchment_precip_from_bindings(
+            catchment_id=catchment_id,
+            stations=stations,
+            times_len=times_len,
+            get_station_precip_series=lambda sid: _precip_values_from_station_package(
+                station_packages, sid, times_len
+            ),
+            warnings=warnings,
+        )
 
     return out, warnings
 
@@ -502,7 +481,10 @@ def build_node_observed_flow_series(
         ]
         sid = next((x for x in sid_candidates if x), "")
         if sid and sid in observed_flows:
-            out[str(node_id)] = list(observed_flows[sid].values)
+            ts = observed_flows[sid]
+            if ts.values.ndim != 1:
+                raise ValueError("build_node_observed_flow_series requires 1-D observed flow series")
+            out[str(node_id)] = ts.values.tolist()
     return out
 
 
