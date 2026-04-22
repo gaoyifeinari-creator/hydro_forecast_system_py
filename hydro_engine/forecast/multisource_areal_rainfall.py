@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from sqlalchemy import bindparam, text
 
@@ -139,6 +139,7 @@ class CompileRequest:
     fluctuate_range: float = 0.0  # 0.1 = +/-10%
     use_min_max_from_db: bool = True
     latest_ftime_lookback_days: int = 6
+    debug_records_hook: Optional[Callable[[str, int, Sequence[ForecastRainRecord]], None]] = None
 
 
 class MultiSourceArealRainfallCompiler:
@@ -170,6 +171,10 @@ class MultiSourceArealRainfallCompiler:
         }
 
         latest_begin = req.forecast_begin - timedelta(days=req.latest_ftime_lookback_days)
+        latest_end = self._resolve_latest_ftime_end(
+            forecast_begin=req.forecast_begin,
+            target_time_type=str(req.target_time_type),
+        )
 
         # 2) 覆盖写入：先低优先级后高优先级
         source_steps = self._build_source_steps(req.source_config)
@@ -179,15 +184,18 @@ class MultiSourceArealRainfallCompiler:
                 subtype=subtype,
                 time_span_hours=int(span),
                 latest_ftime_begin=latest_begin,
-                latest_ftime_end=req.forecast_begin,
+                latest_ftime_end=latest_end,
                 read_begin=req.forecast_begin - timedelta(hours=span),
                 read_end=req.forecast_end,
             )
+            if req.debug_records_hook is not None:
+                req.debug_records_hook(str(subtype), int(span), records)
             self._write_records_to_hour_canvas(
                 data_map=data_map,
                 records=records,
                 forecast_begin=req.forecast_begin,
                 hour_count=hour_count,
+                target_time_type=str(req.target_time_type),
                 dbtype=req.dbtype,
                 distribution_params=req.distribution_params,
                 fluctuate_range=req.fluctuate_range,
@@ -228,6 +236,7 @@ class MultiSourceArealRainfallCompiler:
         records: Sequence[ForecastRainRecord],
         forecast_begin: datetime,
         hour_count: int,
+        target_time_type: str,
         dbtype: int,
         distribution_params: Sequence[RainDistributionParam],
         fluctuate_range: float,
@@ -248,10 +257,14 @@ class MultiSourceArealRainfallCompiler:
                 continue
 
             span = int(r.time_span_hours)
-            # 前后时标对齐：
-            # - 前时标（-1）：以时段起点 BTIME 落槽
-            # - 后时标（0）：以时段终点（BTIME + span）落槽
-            anchor_time = wea_begin if int(dbtype) == -1 else (wea_begin + timedelta(hours=span))
+            is_day_target = str(target_time_type).strip().lower() == "day"
+            # 前后时标对齐（源表固定为“前时标”）：
+            # - Hour 目标：后时标按业务要求做 +1h 标签平移（如 14~17 -> 15/16/17）
+            # - Day 目标：不做小时落槽平移；日尺度只在最终输出阶段做标签 +1 天。
+            if int(dbtype) == -1 or is_day_target:
+                anchor_time = wea_begin
+            else:
+                anchor_time = wea_begin + timedelta(hours=1)
             idx = self._hours_between(forecast_begin, anchor_time)
 
             avgp = float(r.aver_pre)
@@ -376,6 +389,9 @@ class MultiSourceArealRainfallCompiler:
                     s1 += arr_min[k]
                     s2 += arr_max[k]
                 t = self._add_step(real_begin, step_unit, j)
+                if step_unit == "day" and int(dbtype) == 0:
+                    # 日尺度展示口径：后时标标签整体 +1 天（仅改标签，不改日值）。
+                    t = t + timedelta(days=1)
                 points.append(
                     ForecastRainPoint(
                         reg_id=reg,
@@ -386,6 +402,25 @@ class MultiSourceArealRainfallCompiler:
                     )
                 )
         return points
+
+    @staticmethod
+    def _resolve_latest_ftime_end(*, forecast_begin: datetime, target_time_type: str) -> datetime:
+        """
+        解析“最新 FTIME”查询上界。
+
+        与 HPS 口径对齐：
+        - Hour: 使用 forecast_begin（保持原逻辑）
+        - Day : 使用“forecast_begin 同日 + 当前小时”，便于日预报在白天命中当天 08/14 等更新产品
+        """
+        if str(target_time_type).strip().lower() != "day":
+            return forecast_begin
+        now = datetime.now()
+        return forecast_begin.replace(
+            hour=int(now.hour),
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
 
     @staticmethod
     def _hours_between(beg: datetime, end: datetime) -> int:
@@ -419,7 +454,6 @@ def parse_forecast_rain_config_from_scheme(scheme_dict: Mapping[str, Any]) -> Fo
         raise ValueError("future_rainfall.sources must be a non-empty list")
 
     all_sources: List[ForecastRainSourceConfig] = []
-    selected_idx: Optional[int] = None
 
     for i, item in enumerate(sources_raw):
         if not isinstance(item, Mapping):
@@ -428,7 +462,7 @@ def parse_forecast_rain_config_from_scheme(scheme_dict: Mapping[str, Any]) -> Fo
         if not name:
             raise ValueError(f"future_rainfall.sources[{i}] missing name")
 
-        # 兼容 Java 键名：unitType/timeSpan/subRainSource/isSelect/subType/rank
+        # 兼容 Java 键名：unitType/timeSpan/subRainSource/subType/rank
         unit_type = str(item.get("unit_type", item.get("unitType", "")) or "").strip()
         if not unit_type:
             raise ValueError(f"future_rainfall.sources[{i}] missing unit_type/unitType")
@@ -460,17 +494,17 @@ def parse_forecast_rain_config_from_scheme(scheme_dict: Mapping[str, Any]) -> Fo
         )
         all_sources.append(source)
 
-        selected = item.get("is_select", item.get("isSelect", False))
-        if bool(selected):
-            selected_idx = i
-
-    if selected_idx is None:
-        selected_name = str(block.get("selected_source_name", "") or "").strip()
-        if selected_name:
-            for i, s in enumerate(all_sources):
-                if s.name == selected_name:
-                    selected_idx = i
-                    break
+    selected_idx: Optional[int] = None
+    selected_name = str(block.get("selected_source_name", "") or "").strip()
+    if selected_name:
+        for i, s in enumerate(all_sources):
+            if s.name == selected_name:
+                selected_idx = i
+                break
+        if selected_idx is None:
+            raise ValueError(
+                f"future_rainfall.selected_source_name={selected_name!r} not found in sources names"
+            )
     if selected_idx is None:
         selected_idx = 0
 
@@ -524,10 +558,6 @@ class ForecastDbConfig:
 
 def load_forecast_db_config_from_jdbc_json(
     jdbc_json_path: str | Path,
-    *,
-    service_name: Optional[str] = None,
-    table_name: str = "WEA_GFSFORRAIN",
-    prefer_two_step_latest: bool = True,
 ) -> ForecastDbConfig:
     """
     从 floodForecastJdbc 风格配置解析预报降雨读库参数。
@@ -540,7 +570,11 @@ def load_forecast_db_config_from_jdbc_json(
     if not isinstance(services, list) or not services:
         raise ValueError("jdbc json missing services array")
 
-    svc = str(service_name or data.get("hourly_service") or "").strip()
+    forecast_db = data.get("forecast_rain") or {}
+    if not isinstance(forecast_db, dict):
+        forecast_db = {}
+
+    svc = str(forecast_db.get("service_name") or data.get("hourly_service") or "").strip()
     if not svc:
         svc = str((services[0] or {}).get("service") or "").strip()
     if not svc:
@@ -563,6 +597,8 @@ def load_forecast_db_config_from_jdbc_json(
     if pool_max < pool_min:
         pool_max = pool_min
     dialect = str(data.get("dialect") or "dameng").strip().lower()
+    table_name = str(forecast_db.get("table_name") or "WEA_GFSFORRAIN").strip() or "WEA_GFSFORRAIN"
+    prefer_two_step_latest = bool(forecast_db.get("prefer_two_step_latest", True))
     return ForecastDbConfig(
         url=url,
         dialect=dialect,
@@ -580,6 +616,10 @@ class SqlAlchemyForecastRainRepository(ForecastRainRepository):
     支持两种“最新 FTIME”策略：
     - 两步策略（默认）：先查 max(FTIME)，再按 FTIME + 条件查明细
     - 单 SQL 子查询策略：在明细 SQL 中嵌套 max(FTIME) 子查询
+
+    注意：
+    - max(FTIME) 在时间窗口内按“全表统一批次”选择，不再按 subtype/timespan 分开取最新。
+      这样多步长融合会使用同一预报发布时间，避免跨步长批次混用导致的个别时段偏差。
     """
 
     def __init__(self, cfg: ForecastDbConfig):
@@ -643,8 +683,6 @@ class SqlAlchemyForecastRainRepository(ForecastRainRepository):
             FROM {self._table}
             WHERE FTIME >= :ftime_begin
               AND FTIME < :ftime_end
-              AND SUBTYPE = :subtype
-              AND TIMESPAN = :timespan
             """
         )
         sql_rows = text(
@@ -666,8 +704,6 @@ class SqlAlchemyForecastRainRepository(ForecastRainRepository):
                 {
                     "ftime_begin": latest_ftime_begin,
                     "ftime_end": latest_ftime_end,
-                    "subtype": subtype,
-                    "timespan": int(time_span_hours),
                 },
             ).first()
             max_ftime = None if max_row is None else max_row[0]
@@ -709,8 +745,6 @@ class SqlAlchemyForecastRainRepository(ForecastRainRepository):
                   FROM {self._table}
                   WHERE FTIME >= :ftime_begin
                     AND FTIME < :ftime_end
-                    AND SUBTYPE = :subtype
-                    AND TIMESPAN = :timespan
               )
               AND BTIME >= :read_begin
               AND BTIME <= :read_end

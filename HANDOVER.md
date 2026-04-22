@@ -298,6 +298,123 @@ python -m unittest discover -v
     - 蒸发月值
   - 用于快速排除“参数转换误差导致退水偏差”的问题。
 
+### 10.10 数据结构统一化调整（2026-04）
+
+本轮围绕“减少冗余、分离职责、统一序列形态”做了数据结构调整：
+
+1. **`TimeSeries` NumPy 化**
+   - `values` 统一为 `np.ndarray`，支持 `(T,)` 与 `(S,T)`。
+   - 长度判定统一用 `time_steps`；对外序列化统一 `tolist()`。
+
+2. **拓扑单一真相**
+   - 节点不再作为入/出边真相维护者。
+   - 配置中 `nodes[].incoming_reach_ids/outgoing_reach_ids` 可不再维护；
+   - 运行时由 `reaches[].upstream_node_id/downstream_node_id` 自动回填节点入/出边。
+
+3. **预报雨数据库参数从方案配置迁移到 JDBC 配置**
+   - 删除 `future_rainfall.db`（方案侧不再配置 service/table/策略）；
+   - 统一从 `floodForecastJdbc.json.forecast_rain` 读取：
+     - `service_name`
+     - `table_name`
+     - `prefer_two_step_latest`
+
+4. **预报源选择去重**
+   - 仅使用 `future_rainfall.selected_source_name` 选源；
+   - 不再使用各 source 下的 `is_select/isSelect`。
+
+5. **站点目录去冗余**
+   - `stations.rain_gauges[*].unit`（固定 mm）移除；
+   - `stations.reservoir` 移除（与 `nodes[].station_binding` 重复）。
+   - `convert_legacy_config.py` 已同步：后续生成的新配置也不再包含上述字段。
+
+6. **配置工具统一**
+   - 新增 `hydro_engine/io/scheme_config_utils.py`，集中 scheme 读取/匹配逻辑；
+   - 新增 `native_time_delta(...)`，统一 `time_type + step_size -> timedelta`。
+
+### 10.11 配置去冗余落地（2026-04-21）
+
+本日进一步完成“配置单一真相”收口，主要是把重复字段从方案配置中移除，并同步代码读取逻辑：
+
+1. **`stations.rain_gauges[*].unit` 移除**
+   - 雨量站单位固定按 mm 处理，不再在 JSON 中重复写 `unit`。
+   - 转换脚本 `scripts/convert_legacy_config.py` 同步：后续生成配置不再输出该字段。
+
+2. **`stations.reservoir` 目录移除**
+   - 该目录与 `nodes[].station_binding`（入库/出库/水位站）重复。
+   - 当前约定：计算与展示所需水库站点信息以 `nodes[].station_binding` 为准。
+   - 转换脚本同步移除该目录输出。
+
+3. **当前方案文件已同步精简**
+   - `configs/forecastSchemeConf.json` 已删除 `rain_gauges.unit`、`stations.reservoir`、以及节点侧 reach 冗余字段（见 §10.10）。
+   - 配置维护时只需关注 `nodes`/`reaches`/`catchments`/`station_binding` 的核心字段。
+
+4. **NumPy 数据结构升级（本日同步）**
+   - `TimeSeries.values` 统一为 `np.ndarray`，支持确定性 `(T,)` 与集合 `(S,T)`。
+   - 长度与时间维统一使用 `time_steps` 语义；序列化输出统一 `tolist()`。
+   - `MuskingumRoutingModel` 已支持情景维向量化计算（2D 输入）。
+   - 相关适配已覆盖 `json_config`、节点拼接、校正器与构建链路（不改变核心物理逻辑）。
+
+### 10.12 预报面雨日整编与 FTIME 口径修正（2026-04-22）
+
+本日围绕“`FTIME=2025-10-30 20:00`、单元 `154034` 与 HPS 对账”做了链路修正与可观测性增强，核心结论是：
+
+- 小时序列正确时，日偏差通常来自“日整编口径 + 时标标签映射 + 最新批次选择窗口”三者的组合，而非单一读库错误。
+
+本轮在 Python 仓库（`hydro_project`）落地如下改动：
+
+1. **新增多步长转日雨量模块（1 小时画布法）**
+   - 新文件：`hydro_engine/forecast/daily_rainfall_compiler.py`
+   - 入口与数据结构：
+     - `RainSpanRecord(start_time, span_hours, value)`
+     - `build_hourly_canvas(...)`
+     - `aggregate_hourly_canvas_to_daily(...)`
+     - `compile_multispan_rain_to_daily(...)`
+   - 特性：
+     - 统一按 `value/span_hours` 拆到小时桶；
+     - 跨日不写 if-else 特判，直接由小时桶归属自然日；
+     - 支持前/后时标日标签切换（后时标仅标签 +1 天，不改日值）。
+
+2. **小时时标映射修正（后时标 +1h）**
+   - 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`
+   - 将后时标锚点由“`BTIME + TIMESPAN`”改为“`BTIME + 1h`”，对齐业务语义：
+     - 例：`BTIME=14:00, TIMESPAN=3, VALUE=2.1` -> `15/16/17` 各 `0.7`。
+
+3. **日尺度时标映射修正（仅标签平移）**
+   - 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`
+   - 对 `RSDay`：
+     - 不再在小时落槽阶段执行后时标 +1h；
+     - 日值先按前时标口径整编，再在输出标签阶段（`dbtype=0`）统一 +1 天。
+   - 目的：避免跨午夜分摊被二次改写导致个别日值偏差。
+
+4. **最新 FTIME 口径与 HPS 对齐（Day 模式）**
+   - 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`
+   - `latest_ftime_end` 规则：
+     - `Hour`：保持 `forecast_begin`；
+     - `Day`：使用“`forecast_begin` 同日 + 当前小时（分秒清零）”。
+   - 效果：下午运行日预报可命中当天 08/14 等更新批次，避免固定落到前一日 20 时次。
+
+5. **最新批次统一策略（多步长一致）**
+   - 文件：`hydro_engine/forecast/multisource_areal_rainfall.py`
+   - 由“每个 `subtype+timespan` 各自取最新 FTIME”改为“窗口内统一 `MAX(FTIME)`”。
+   - 目的：避免 3h/6h 混入不同起报批次造成局部时段偏差。
+
+6. **对账调试日志增强**
+   - 文件：`scripts/calculation_pipeline_runner.py`
+   - 新增日志：
+     - 请求级：`time_type/step/dbtype/forecast_begin/end`
+     - 每源级：`subtype/span/records/ftime`
+     - 单元级（`154034`）：原始 `BTIME/TIMESPAN/AVERPRE` 与整编结果 `time/value/min/max`。
+   - 用途：支持与 HPS 明细逐条核对，快速定位“批次/拆分/标签”哪一段不一致。
+
+7. **测试新增与回归**
+   - 新增：`tests/test_daily_rainfall_compiler.py`
+   - 增强：`tests/test_forecast_rain_dbtype_mapping.py`
+   - 覆盖点：
+     - 跨日拆分正确性；
+     - 前后时标小时映射；
+     - 日标签 +1 天；
+     - Day/Hour 模式下 `latest_ftime_end` 行为。
+
 ---
 
 ## 11. 版本与变更记录（摘要）
@@ -312,6 +429,8 @@ python -m unittest discover -v
 | **2026-04-17**（更新 5） | **实时读库**：雨/流/温共用 `station_table_query_end`；`collect_all_station_ids_for_calculation` + `unified_station_senids` 同库 **一次 IN**；`collect_rain_station_ids` 含气温；`clip_station_dataframe_rows_before_forecast_start`。 **预报情景面雨**：`run_calculation_from_json` 关键字参数 + `scenario_forcing` + pipeline/Web 参数与 `runtime_cache` 字段。详见 `DEVELOPMENT_MANUAL.md` §5.2–5.3、§10.6b 与本文 §10.7。 |
 | **2026-04-20**（更新 6） | **前后时标接入**：支持 `schemes[].dbtype`（`-1` 前时标、`0` 后时标），Web 侧栏只读展示当前时标模式（按 `time_type + step_size` 精确匹配）。**前时标修复**：补齐“读窗平移 + 标签回拨”，修复末端实测漏读引发的尾点复制问题。详见 `DEVELOPMENT_MANUAL.md` §5、§5.5 与本文 §10.8。 |
 | **2026-04-20**（更新 7） | **预报面雨时标统一**：`WEA_GFSFORRAIN` 作为前时标源，后时标方案只在整编锚点阶段做一次映射，去除后续二次平移；修正“展示前后错一格”问题。新增 `scripts/diagnose_scheme_conversion.py` 对账 XML/JSON 参数一致性。 |
+| **2026-04-21**（更新 8） | **配置去冗余收口 + NumPy 升级落地**：`stations.rain_gauges[*].unit` 移除（固定 mm）；`stations.reservoir` 移除（以 `nodes[].station_binding` 为单一来源）；`nodes[].incoming_reach_ids/outgoing_reach_ids` 停止维护并由 `reaches` 自动回填；预报雨 DB 参数统一从 `floodForecastJdbc.json.forecast_rain` 读取，`future_rainfall.db` 删除；预报源选择仅认 `selected_source_name`；`TimeSeries.values` 升级为 `np.ndarray`，`MuskingumRoutingModel` 支持集合维向量化。 |
+| **2026-04-22**（更新 9） | **预报面雨对账修复**：新增“多步长->1小时->自然日”编译模块；后时标小时映射修正为 `+1h`；日尺度改为“值不平移、仅标签 +1 天”；`Day` 模式 `latest_ftime_end` 对齐 HPS（同日+当前小时）；统一 `MAX(FTIME)` 批次策略；新增 `154034` 对账日志与回归测试。详见本文 §10.12。 |
 
 ---
 

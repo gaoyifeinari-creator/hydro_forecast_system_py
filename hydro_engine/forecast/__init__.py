@@ -4,6 +4,13 @@
 
 from hydro_engine.forecast.catchment_forecast_rainfall import CatchmentForecastRainfall
 from hydro_engine.forecast.forecast_data_manager import ForecastDataManager
+from hydro_engine.forecast.daily_rainfall_compiler import (
+    DailyRainfallPoint,
+    RainSpanRecord,
+    aggregate_hourly_canvas_to_daily,
+    build_hourly_canvas,
+    compile_multispan_rain_to_daily,
+)
 from hydro_engine.forecast.multisource_areal_rainfall import (
     CompileRequest,
     ForecastRainConfigBundle,
@@ -34,6 +41,11 @@ from hydro_engine.forecast.skeleton_pipeline import (
 __all__ = [
     "CatchmentForecastRainfall",
     "ForecastDataManager",
+    "RainSpanRecord",
+    "DailyRainfallPoint",
+    "build_hourly_canvas",
+    "aggregate_hourly_canvas_to_daily",
+    "compile_multispan_rain_to_daily",
     "RunoffWarmstartSnapshot",
     "capture_runoff_warmstart",
     "apply_runoff_warmstart",

@@ -20,10 +20,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 from hydro_engine.core.forcing import ForcingKind
-from hydro_engine.core.context import parse_time_type, TimeType
+from hydro_engine.core.context import native_time_delta
 from hydro_engine.io.calculation_app_data_builder import (
     apply_catchment_forecast_fusion_to_station_packages,
     build_catchment_observed_flow_series,
@@ -59,9 +60,15 @@ from hydro_engine.forecast.multisource_areal_rainfall import (
 from hydro_engine.forecast.scenario_forcing import load_catchment_forecast_rainfall_map_from_csv
 from hydro_engine.io.json_config import (
     apply_realtime_forecast_observed_meteorology_cutoff,
-    flatten_stations_catalog,
     load_scheme_from_json,
     run_calculation_from_json,
+)
+from hydro_engine.io.scheme_config_utils import (
+    catchment_catalog_names_from_scheme,
+    read_schemes_list,
+    select_scheme_dict_exact,
+    scheme_dbtype,
+    station_catalog_names_from_scheme,
 )
 
 # 从 scripts 层复用：把 UI 传入的四段步数写入临时 config（避免修改真实配置）
@@ -85,73 +92,16 @@ def _read_station_catalog_names(config_path: str, time_type: str, step_size: int
     从与当前 time_type / step_size 匹配的方案中读取 stations 目录，得到测站 id -> 配置名称。
     无名称或未配置 stations 时不在字典中出现（由 UI 仅展示 id）。
     """
-    try:
-        data = read_config(config_path)
-    except Exception:
-        return {}
-    schemes = data.get("schemes")
-    if not isinstance(schemes, list):
-        return {}
-    tt = str(time_type).strip()
-    sz = int(step_size)
-    target: Optional[Dict[str, Any]] = None
-    for s in schemes:
-        if not isinstance(s, dict):
-            continue
-        if str(s.get("time_type", "")).strip() == tt and int(s.get("step_size", -999999)) == sz:
-            target = s
-            break
-    if not isinstance(target, dict):
-        return {}
-    raw = target.get("stations")
-    if raw is None:
-        return {}
-    try:
-        flat = flatten_stations_catalog(raw)
-    except Exception:
-        return {}
-    out: Dict[str, str] = {}
-    for e in flat:
-        sid = str(e.get("id", "")).strip()
-        if not sid:
-            continue
-        nm = str(e.get("name", "") or "").strip()
-        if nm:
-            out[sid] = nm
-    return out
+    schemes = read_schemes_list(config_path)
+    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    return station_catalog_names_from_scheme(target)
 
 
 def _read_catchment_catalog_names(config_path: str, time_type: str, step_size: int) -> Dict[str, str]:
     """从当前方案 catchments[] 读取子流域 id -> name（用于 Web 展示）。"""
-    try:
-        data = read_config(config_path)
-    except Exception:
-        return {}
-    schemes = data.get("schemes")
-    if not isinstance(schemes, list):
-        return {}
-    tt = str(time_type).strip()
-    sz = int(step_size)
-    target: Optional[Dict[str, Any]] = None
-    for s in schemes:
-        if not isinstance(s, dict):
-            continue
-        if str(s.get("time_type", "")).strip() == tt and int(s.get("step_size", -999999)) == sz:
-            target = s
-            break
-    if not isinstance(target, dict):
-        return {}
-    out: Dict[str, str] = {}
-    for c in target.get("catchments") or []:
-        if not isinstance(c, dict):
-            continue
-        cid = str(c.get("id", "")).strip()
-        if not cid:
-            continue
-        nm = str(c.get("name", "") or "").strip()
-        if nm:
-            out[cid] = nm
-    return out
+    schemes = read_schemes_list(config_path)
+    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    return catchment_catalog_names_from_scheme(target)
 
 
 def _read_scheme_dbtype(config_path: str, time_type: str, step_size: int) -> int:
@@ -162,28 +112,9 @@ def _read_scheme_dbtype(config_path: str, time_type: str, step_size: int) -> int
 
     兼容：若配置缺失/异常，回退为 -1。
     """
-    try:
-        data = read_config(config_path)
-    except Exception:
-        return -1
-    schemes = data.get("schemes")
-    if not isinstance(schemes, list):
-        return -1
-    tt = str(time_type).strip()
-    sz = int(step_size)
-    for s in schemes:
-        if not isinstance(s, dict):
-            continue
-        if str(s.get("time_type", "")).strip() != tt:
-            continue
-        if int(s.get("step_size", -999999)) != sz:
-            continue
-        raw = s.get("dbtype", -1)
-        try:
-            return int(raw)
-        except Exception:
-            return -1
-    return -1
+    schemes = read_schemes_list(config_path)
+    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    return scheme_dbtype(target, default=-1)
 
 
 def _log(msg: str, on_log: OnLog) -> None:
@@ -236,18 +167,10 @@ def _load_forecast_rain_from_scheme_db(
     从 scheme.future_rainfall 读取配置，查库整编并生成 catchment 级预报雨量情景。
     """
     try:
-        data = read_config(config_path)
-        schemes = data.get("schemes") or []
-        target = None
-        for s in schemes:
-            if not isinstance(s, dict):
-                continue
-            if str(s.get("time_type", "")).strip() != str(time_type).strip():
-                continue
-            if int(s.get("step_size", -999999)) != int(step_size):
-                continue
-            target = s
-            break
+        schemes = read_schemes_list(config_path)
+        target = select_scheme_dict_exact(
+            schemes, time_type=str(time_type), step_size=int(step_size)
+        )
         if not isinstance(target, dict):
             return {}
 
@@ -261,19 +184,19 @@ def _load_forecast_rain_from_scheme_db(
             _log("[forecast_scenario_rain] scheme has no catchments, skip db forecast rain", on_log)
             return {}
 
-        db_cfg = dict(future_cfg.get("db") or {})
-        service_name = str(db_cfg.get("service_name", db_cfg.get("service", "")) or "").strip() or None
-        table_name = str(db_cfg.get("table_name", "WEA_GFSFORRAIN") or "WEA_GFSFORRAIN").strip()
-        prefer_two_step_latest = bool(db_cfg.get("prefer_two_step_latest", True))
-
         repo_cfg = load_forecast_db_config_from_jdbc_json(
             jdbc_config_path,
-            service_name=service_name,
-            table_name=table_name,
-            prefer_two_step_latest=prefer_two_step_latest,
         )
         repo = SqlAlchemyForecastRainRepository(repo_cfg)
         compiler = MultiSourceArealRainfallCompiler(repo)
+        debug_records: List[Tuple[str, int, List[Any]]] = []
+
+        def _debug_records_hook(subtype: str, span: int, records: Any) -> None:
+            try:
+                debug_records.append((str(subtype), int(span), list(records or [])))
+            except Exception:
+                pass
+
         req = CompileRequest(
             forecast_begin=time_context.forecast_start_time,
             forecast_end=time_context.end_time,
@@ -287,8 +210,37 @@ def _load_forecast_rain_from_scheme_db(
             fluctuate_range=float(future_cfg.get("fluctuate_range", 0.0) or 0.0),
             use_min_max_from_db=bool(future_cfg.get("use_min_max_from_db", True)),
             latest_ftime_lookback_days=int(future_cfg.get("latest_ftime_lookback_days", 6) or 6),
+            debug_records_hook=_debug_records_hook,
+        )
+        _log(
+            "[forecast_scenario_rain][debug] request "
+            f"time_type={req.target_time_type} step={req.target_time_step} dbtype={req.dbtype} "
+            f"forecast_begin={req.forecast_begin} forecast_end={req.forecast_end}",
+            on_log,
         )
         points = compiler.compile(req)
+        # 打印“统一 FTIME + 明细记录”对账信息，便于与 HPS 逐条核对。
+        for subtype, span, records in debug_records:
+            if not records:
+                _log(
+                    f"[forecast_scenario_rain][debug] subtype={subtype} span={span}h records=0",
+                    on_log,
+                )
+                continue
+            ftime_set = sorted({str(getattr(r, "ftime", "")) for r in records})
+            _log(
+                f"[forecast_scenario_rain][debug] subtype={subtype} span={span}h records={len(records)} "
+                f"ftime={ftime_set}",
+                on_log,
+            )
+            rec_154034 = [r for r in records if str(getattr(r, "reg_id", "")) == "154034"]
+            for r in sorted(rec_154034, key=lambda x: getattr(x, "btime", datetime.min)):
+                _log(
+                    "[forecast_scenario_rain][debug][154034][raw] "
+                    f"btime={getattr(r, 'btime', '')} span={getattr(r, 'time_span_hours', '')} "
+                    f"aver={float(getattr(r, 'aver_pre', 0.0)):.6f}",
+                    on_log,
+                )
         if not points:
             _log("[forecast_scenario_rain] db forecast rain compiled 0 points", on_log)
             return {}
@@ -309,6 +261,14 @@ def _load_forecast_rain_from_scheme_db(
                 lower=[float(x.min_value) for x in arr_sorted],
                 time_step=time_context.time_delta,
             )
+            if str(cid) == "154034":
+                for p in arr_sorted:
+                    _log(
+                        "[forecast_scenario_rain][debug][154034][compiled] "
+                        f"time={p.time} value={float(p.value):.6f} min={float(p.min_value):.6f} "
+                        f"max={float(p.max_value):.6f}",
+                        on_log,
+                    )
 
         _log(
             f"[forecast_scenario_rain] db compiled catchments={len(out)} "
@@ -319,23 +279,6 @@ def _load_forecast_rain_from_scheme_db(
     except Exception as exc:  # noqa: BLE001
         _log(f"[forecast_scenario_rain] db compile failed: {exc}", on_log)
         return {}
-
-
-def _make_timedelta_for_time_type(time_type: str, step_size: int) -> timedelta:
-    """
-    根据 time_type + step_size 得到引擎原生时间步长。
-    注意：这里是“原生粒度”，不是换算到小时/天。
-    """
-    tt = parse_time_type(time_type)
-    s = int(step_size)
-    if tt is TimeType.MINUTE:
-        return timedelta(minutes=s)
-    if tt is TimeType.HOUR:
-        return timedelta(hours=s)
-    if tt is TimeType.DAY:
-        return timedelta(days=s)
-    # parse_time_type 理论上已覆盖，这里兜底
-    return timedelta(seconds=s)
 
 
 def _resolve_actual_forecast_start(
@@ -424,7 +367,7 @@ def _build_station_series_maps(
             ts = pkg.get(kind)
             if ts is None:
                 continue
-            target[str(sid)] = [float(x) for x in ts.values]
+            target[str(sid)] = [float(x) for x in np.asarray(ts.values, dtype=np.float64).ravel().tolist()]
     return station_precip, station_pet, station_temp
 
 
@@ -647,7 +590,7 @@ def run_calculation_pipeline(
     # 这里把它当作 forecast_start_time（预报起点），再往回推 warmup_start_time，
     # 以保证雨量站/测站序列的“读数时间轴”与用户选择的预报起点一致。
     forecast_start_time_input = _parse_warmup_start(warmup_start)
-    td = _make_timedelta_for_time_type(str(time_type), int(step_size))
+    td = native_time_delta(time_type=str(time_type), step_size=int(step_size))
     dbtype = _read_scheme_dbtype(
         config_path=str(config_path),
         time_type=str(time_type),
@@ -911,7 +854,8 @@ def run_calculation_pipeline(
         station_packages=station_packages,
     )
     station_flow: Dict[str, List[float]] = {
-        str(sid): [float(x) for x in ts.values] for sid, ts in (observed_flows or {}).items()
+        str(sid): [float(x) for x in np.asarray(ts.values, dtype=np.float64).ravel().tolist()]
+        for sid, ts in (observed_flows or {}).items()
     }
 
     # 9) aux：node observed inflow/outflow 拆分
@@ -924,12 +868,16 @@ def run_calculation_pipeline(
         out_sid = str(getattr(node, "observed_station_id", "") or "").strip()
 
         if infl_sid and infl_sid in observed_flows:
-            node_observed_inflows[nid] = [float(x) for x in observed_flows[infl_sid].values]
+            node_observed_inflows[nid] = [
+                float(x) for x in np.asarray(observed_flows[infl_sid].values, dtype=np.float64).ravel().tolist()
+            ]
         else:
             node_observed_inflows[nid] = [float("nan")] * len(times)
 
         if out_sid and out_sid in observed_flows:
-            node_observed_outflows[nid] = [float(x) for x in observed_flows[out_sid].values]
+            node_observed_outflows[nid] = [
+                float(x) for x in np.asarray(observed_flows[out_sid].values, dtype=np.float64).ravel().tolist()
+            ]
         else:
             node_observed_outflows[nid] = [float("nan")] * len(times)
 
