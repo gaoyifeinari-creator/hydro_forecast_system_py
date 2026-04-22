@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import warnings
 
 from hydro_engine.core.context import ForecastTimeContext
 from hydro_engine.core.forcing import ForcingData, ForcingKind, validate_forcing_contract
 from hydro_engine.core.timeseries import TimeSeries, add_timeseries_list
+from hydro_engine.domain.nodes.reservoir import ReservoirNode
 from hydro_engine.engine.scheme import ForecastingScheme
 
 
@@ -73,6 +74,10 @@ class CalculationResult:
     catchment_routed_flows: Dict[str, TimeSeries] = field(default_factory=dict)
     catchment_debug_traces: Dict[str, List[Dict[str, float]]] = field(default_factory=dict)
     reach_flows: Dict[str, TimeSeries] = field(default_factory=dict)
+    interval_channels: List[str] = field(default_factory=list)
+    node_interval_inflows: Dict[str, Dict[str, TimeSeries]] = field(default_factory=dict)
+    node_interval_outflows: Dict[str, Dict[str, TimeSeries]] = field(default_factory=dict)
+    reach_interval_flows: Dict[str, Dict[str, TimeSeries]] = field(default_factory=dict)
 
     def get_display_results(self) -> Dict[str, TimeSeries]:
         """
@@ -86,6 +91,20 @@ class CalculationResult:
             out[f"node:{nid}"] = s.slice(tc.display_start_time, tc.end_time)
         for rid, s in self.reach_flows.items():
             out[f"reach:{rid}"] = s.slice(tc.display_start_time, tc.end_time)
+        # 区间通道也下沉到统一 display_results 接口，便于调度/导出复用。
+        for nid, cmap in self.node_interval_inflows.items():
+            for ch, s in cmap.items():
+                out[f"node_interval_inflow:{ch}:{nid}"] = s.slice(
+                    tc.display_start_time, tc.end_time
+                )
+        for nid, cmap in self.node_interval_outflows.items():
+            for ch, s in cmap.items():
+                out[f"node_interval_outflow:{ch}:{nid}"] = s.slice(
+                    tc.display_start_time, tc.end_time
+                )
+        for ch, rmap in self.reach_interval_flows.items():
+            for rid, s in rmap.items():
+                out[f"reach_interval:{ch}:{rid}"] = s.slice(tc.display_start_time, tc.end_time)
         return out
 
 
@@ -110,6 +129,38 @@ class CalculationEngine:
         _validate_station_data_native_scale(time_context, catchment_forcing, observed_flows)
 
         topo_order = scheme.topological_order()
+        reservoir_node_ids: Set[str] = {
+            str(nid) for nid, n in scheme.nodes.items() if isinstance(n, ReservoirNode)
+        }
+        channel_cfgs = list(scheme.custom_interval_channels or [])
+        if not channel_cfgs:
+            channel_cfgs = [{"name": "default", "boundary_node_ids": []}]
+        if not any(str(c.get("name", "")).strip() == "default" for c in channel_cfgs):
+            channel_cfgs = [{"name": "default", "boundary_node_ids": []}] + channel_cfgs
+        channel_names: List[str] = []
+        channel_boundaries: Dict[str, Set[str]] = {}
+        for c in channel_cfgs:
+            name = str(c.get("name", "")).strip()
+            if not name:
+                continue
+            if name in channel_boundaries:
+                continue
+            channel_names.append(name)
+            if name == "default":
+                # 标准相邻水库区间：default 通道默认在所有水库节点清零；
+                # 同时允许配置显式 boundary_node_ids（用于“水库在当前方案被建成非 ReservoirNode”场景）。
+                configured = {
+                    str(x).strip()
+                    for x in (c.get("boundary_node_ids") or [])
+                    if str(x).strip()
+                }
+                channel_boundaries[name] = set(reservoir_node_ids) | configured
+            else:
+                channel_boundaries[name] = {
+                    str(x).strip()
+                    for x in (c.get("boundary_node_ids") or [])
+                    if str(x).strip()
+                }
 
         for catchment_id, catchment in scheme.catchments.items():
             if catchment_id not in catchment_forcing:
@@ -120,7 +171,7 @@ class CalculationEngine:
                     f"Catchment '{catchment_id}' must configure routing_model."
                 )
 
-        result = CalculationResult(time_context=time_context)
+        result = CalculationResult(time_context=time_context, interval_channels=channel_names)
         local_runoff: Dict[str, TimeSeries] = {}
         catchments = list(scheme.catchments.items())
         workers = int(catchment_workers or 0)
@@ -155,7 +206,13 @@ class CalculationEngine:
                         result.catchment_debug_traces[cid] = rows
 
         reach_cache: Dict[str, TimeSeries] = {}
+        reach_interval_cache: Dict[str, Dict[str, TimeSeries]] = {
+            ch: {} for ch in channel_names
+        }
         catchment_routed_to_node: Dict[str, List[TimeSeries]] = {}
+        catchment_routed_to_node_interval: Dict[str, Dict[str, List[TimeSeries]]] = {
+            ch: {} for ch in channel_names
+        }
         catchment_owner_node: Dict[str, str] = {}
         for nid, node in scheme.nodes.items():
             for cid in node.local_catchment_ids:
@@ -186,6 +243,8 @@ class CalculationEngine:
             result.catchment_runoffs[catchment_id] = runoff
             result.catchment_routed_flows[catchment_id] = routed
             catchment_routed_to_node.setdefault(target_node_id, []).append(routed)
+            for ch in channel_names:
+                catchment_routed_to_node_interval[ch].setdefault(target_node_id, []).append(routed)
 
         for node_id in topo_order:
             node = scheme.nodes[node_id]
@@ -263,13 +322,23 @@ class CalculationEngine:
                         RuntimeWarning,
                     )
             inflows: List[TimeSeries] = []
+            interval_inflows: Dict[str, List[TimeSeries]] = {
+                ch: [] for ch in channel_names
+            }
 
             for reach_id in node.incoming_reach_ids:
                 if reach_id in reach_cache:
                     inflows.append(reach_cache[reach_id])
+                for ch in channel_names:
+                    ch_cache = reach_interval_cache[ch]
+                    if reach_id in ch_cache:
+                        interval_inflows[ch].append(ch_cache[reach_id])
 
             for s in catchment_routed_to_node.get(node_id, []):
                 inflows.append(s)
+            for ch in channel_names:
+                for s in catchment_routed_to_node_interval[ch].get(node_id, []):
+                    interval_inflows[ch].append(s)
 
             for catchment_id in node.local_catchment_ids:
                 if catchment_id not in local_runoff:
@@ -282,6 +351,13 @@ class CalculationEngine:
                 total_inflow = add_timeseries_list(inflows)
             else:
                 total_inflow = time_context.build_uniform_series(0.0)
+            node_interval_inflow_map: Dict[str, TimeSeries] = {}
+            for ch in channel_names:
+                ch_arr = interval_inflows[ch]
+                node_interval_inflow_map[ch] = (
+                    add_timeseries_list(ch_arr) if ch_arr else time_context.build_uniform_series(0.0)
+                )
+            result.node_interval_inflows[node_id] = node_interval_inflow_map
 
             outflow_map = node.process_water(
                 total_inflow,
@@ -292,6 +368,32 @@ class CalculationEngine:
             if outflow_map:
                 # 节点总出流（所有出流河段求和），用于前端直接核对“出库/出流”演进效果。
                 result.node_outflows[node_id] = add_timeseries_list(list(outflow_map.values()))
+            node_interval_outflow_sum: Dict[str, TimeSeries] = {}
+            for ch in channel_names:
+                ch_outflow_map = self._compute_interval_outflow_map_for_node(
+                    node=node,
+                    interval_inflow=node_interval_inflow_map[ch],
+                    channel_name=ch,
+                    boundary_node_ids=channel_boundaries.get(ch, set()),
+                    time_context=time_context,
+                )
+                if ch_outflow_map:
+                    node_interval_outflow_sum[ch] = add_timeseries_list(list(ch_outflow_map.values()))
+                else:
+                    node_interval_outflow_sum[ch] = time_context.build_uniform_series(0.0)
+                for out_reach_id, outflow in ch_outflow_map.items():
+                    if out_reach_id not in scheme.reaches:
+                        raise ValueError(f"Unknown reach id: {out_reach_id}")
+                    routing_input = ForcingData.single(ForcingKind.ROUTING_INFLOW, outflow)
+                    validate_forcing_contract(scheme.reaches[out_reach_id].routing_model, routing_input)
+                    routed = scheme.reaches[out_reach_id].route(routing_input)
+                    if out_reach_id in reach_interval_cache[ch]:
+                        reach_interval_cache[ch][out_reach_id] = (
+                            reach_interval_cache[ch][out_reach_id] + routed
+                        )
+                    else:
+                        reach_interval_cache[ch][out_reach_id] = routed
+            result.node_interval_outflows[node_id] = node_interval_outflow_sum
             for out_reach_id, outflow in outflow_map.items():
                 if out_reach_id not in scheme.reaches:
                     raise ValueError(f"Unknown reach id: {out_reach_id}")
@@ -305,4 +407,24 @@ class CalculationEngine:
                     reach_cache[out_reach_id] = routed
 
         result.reach_flows = reach_cache
+        result.reach_interval_flows = reach_interval_cache
         return result
+
+    @staticmethod
+    def _compute_interval_outflow_map_for_node(
+        *,
+        node,
+        interval_inflow: TimeSeries,
+        channel_name: str,
+        boundary_node_ids: Set[str],
+        time_context: ForecastTimeContext,
+    ) -> Dict[str, TimeSeries]:
+        if not node.outgoing_reach_ids:
+            return {}
+        if str(node.id) in boundary_node_ids:
+            z = time_context.build_uniform_series(0.0)
+            return {rid: z for rid in node.outgoing_reach_ids}
+        if isinstance(node, ReservoirNode):
+            return {rid: interval_inflow for rid in node.outgoing_reach_ids}
+        _ = channel_name
+        return node._compute_simulated_outflows(interval_inflow)

@@ -70,6 +70,7 @@ from hydro_engine.io.scheme_config_utils import (
     scheme_dbtype,
     station_catalog_names_from_scheme,
 )
+from hydro_engine.domain.nodes.reservoir import ReservoirNode
 
 # 从 scripts 层复用：把 UI 传入的四段步数写入临时 config（避免修改真实配置）
 from calculation_app_common import write_temp_config_with_periods
@@ -741,6 +742,16 @@ def run_calculation_pipeline(
         f"end_time={time_context.end_time.isoformat()}",
         on_log,
     )
+    reservoir_node_ids = sorted(
+        str(nid) for nid, node in scheme.nodes.items() if isinstance(node, ReservoirNode)
+    )
+    _log(
+        "[interval][debug] loaded scheme node-types "
+        f"reservoir_count={len(reservoir_node_ids)} "
+        f"contains_154034={('154034' in reservoir_node_ids)} "
+        f"contains_154850={('154850' in reservoir_node_ids)}",
+        on_log,
+    )
     times = build_times(
         context_start=time_context.warmup_start_time,
         step=time_context.time_delta,
@@ -1071,6 +1082,16 @@ def run_calculation_pipeline(
     # 12) 输出
     if not compute_forecast:
         nan_series = [float("nan")] * len(times)
+        interval_channels: List[str] = []
+        seen_interval_channels = set()
+        for c in list(getattr(scheme, "custom_interval_channels", []) or []):
+            name = str((c or {}).get("name", "")).strip()
+            if not name or name in seen_interval_channels:
+                continue
+            seen_interval_channels.add(name)
+            interval_channels.append(name)
+        if "default" not in seen_interval_channels:
+            interval_channels.insert(0, "default")
         out: Dict[str, Any] = {
             "node_total_inflows": {str(nid): list(nan_series) for nid in scheme.nodes.keys()},
             "node_outflows": {str(nid): list(nan_series) for nid in scheme.nodes.keys()},
@@ -1079,6 +1100,16 @@ def run_calculation_pipeline(
             "catchment_routed_flows": {},
             "catchment_debug_traces": {},
             "reach_flows": {},
+            "interval_channels": list(interval_channels),
+            "node_interval_inflows": {
+                str(nid): {ch: list(nan_series) for ch in interval_channels}
+                for nid in scheme.nodes.keys()
+            },
+            "node_interval_outflows": {
+                str(nid): {ch: list(nan_series) for ch in interval_channels}
+                for nid in scheme.nodes.keys()
+            },
+            "reach_interval_flows": {ch: {} for ch in interval_channels},
         }
     else:
         out = run_calculation_from_json(

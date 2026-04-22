@@ -727,3 +727,39 @@ sequenceDiagram
   - scheme 读取、精确匹配、默认步长选择、catalog 名称提取集中复用
 - `hydro_engine/core/context.py` 增加 `native_time_delta(...)`
   - 统一 `time_type + step_size -> timedelta` 实现
+
+### 11.7 区间通道与节点边界截断
+
+- 引擎结果新增区间字段：
+  - `interval_channels`
+  - `node_interval_inflows`
+  - `node_interval_outflows`
+  - `reach_interval_flows`
+- `display_results` 已统一下沉区间序列，键格式：
+  - `node_interval_inflow:<channel>:<node_id>`
+  - `node_interval_outflow:<channel>:<node_id>`
+  - `reach_interval:<channel>:<reach_id>`
+
+### 11.8 `default` 通道语义与兼容
+
+- 标准语义：`default` 通道在水库节点清零，表示“相邻水库区间流”。
+- 兼容兜底：支持在 `custom_interval_channels` 中显式声明 `default.boundary_node_ids`；
+  运行时取“自动识别水库边界 ∪ 显式边界”，用于方案中水库节点被建成 `cross_section` 的过渡场景。
+- 配置解析支持显式 `default` 条目，不会与内置默认冲突。
+
+### 11.9 Web 区间通道展示口径
+
+- `scripts/web_calculation_app.py` 新增“区间通道”标签页，支持：
+  - 河段区间流量
+  - 节点区间入流
+  - 节点区间出流
+- 河段下拉显示“上游节点名 -> 下游节点名”，节点下拉优先显示节点名称，便于业务理解。
+
+### 11.10 运行时诊断建议（节点类型）
+
+- 当“区间入流看起来等于 node 入流”且怀疑水库截断未生效时，先看运行日志：
+  - `[interval][debug] loaded scheme node-types ...`
+- 该日志可快速确认本次运行是否将关键节点识别为 `ReservoirNode`，用于排查：
+  - 编辑器改了但未保存到磁盘
+  - 读取路径不是当前编辑文件
+  - 会话缓存导致旧结果复用

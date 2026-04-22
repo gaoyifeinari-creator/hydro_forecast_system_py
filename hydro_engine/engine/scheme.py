@@ -22,6 +22,10 @@ class ForecastingScheme:
     catchment_forecast_rules: Dict[str, Any] = field(default_factory=dict)
     # 可选：由规则解析得到的融合计划（用于 runtime 批量读取与嵌套兜底融合）
     catchment_forecast_fusion_plan: Dict[str, Any] = field(default_factory=dict)
+    # 区间伴随流通道配置（始终包含隐式 default 通道）
+    custom_interval_channels: List[Dict[str, Any]] = field(
+        default_factory=lambda: [{"name": "default", "boundary_node_ids": []}]
+    )
 
     def add_node(self, node: AbstractNode) -> None:
         if node.id in self.nodes:

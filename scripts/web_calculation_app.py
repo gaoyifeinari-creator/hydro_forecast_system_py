@@ -264,6 +264,39 @@ def _catchment_display_label(cid: str, name_map: Any) -> str:
     return f"{nm}（{s}）" if nm else s
 
 
+def _node_display_label(node_id: str, node_name_map: Optional[Dict[str, Any]]) -> str:
+    s = str(node_id)
+    nm = str((node_name_map or {}).get(s) or "").strip()
+    return nm if nm else s
+
+
+def _reach_node_pair_label(
+    reach_id: str,
+    *,
+    aux: Dict[str, Any],
+) -> str:
+    """
+    河段展示标签：优先显示“上游节点名 -> 下游节点名”，缺失时回退为 reach_id。
+    """
+    rid = str(reach_id)
+    node_name_map = aux.get("node_name_map") or {}
+    runtime_cache = aux.get("_runtime_cache") or {}
+    scheme = runtime_cache.get("scheme")
+    if scheme is None:
+        return rid
+    try:
+        reach = scheme.reaches.get(rid)
+    except Exception:
+        reach = None
+    if reach is None:
+        return rid
+    up = _node_display_label(str(getattr(reach, "upstream_node_id", "")), node_name_map)
+    down = _node_display_label(str(getattr(reach, "downstream_node_id", "")), node_name_map)
+    if up and down:
+        return f"{up} -> {down}"
+    return rid
+
+
 def _plot_node_tab(
     output: Dict[str, Any],
     aux: Dict[str, Any],
@@ -455,6 +488,92 @@ def _plot_reach_tab(
     _style_ax_time_x(ax, x_dt, day_precision=day_p)
     fig.tight_layout()
     _st_pyplot(fig)
+
+
+def _plot_interval_channel_tab(
+    output: Dict[str, Any],
+    aux: Dict[str, Any],
+    times: pd.DatetimeIndex,
+    hist_steps: int,
+    forecast_start_idx: int,
+) -> None:
+    channels = [str(x) for x in (output.get("interval_channels") or []) if str(x).strip()]
+    if not channels:
+        st.info("无区间通道结果（默认通道未输出或未启用）")
+        return
+
+    fs = int(forecast_start_idx)
+    hs = max(0, int(hist_steps))
+    d0 = max(0, fs - hs)
+    display_times = times[d0:]
+    x_dt = pd.to_datetime(display_times)
+    day_p = _is_day_precision(aux)
+
+    ch = st.selectbox("区间通道", options=channels, key="interval_channel_pick")
+    metric = st.selectbox(
+        "通道数据类型",
+        options=["河段区间流量", "节点区间入流", "节点区间出流"],
+        key="interval_metric_pick",
+    )
+    if metric == "河段区间流量":
+        m = output.get("reach_interval_flows") or {}
+        scope_map = dict((m.get(ch) or {}))
+        scope_label = "河段"
+    elif metric == "节点区间入流":
+        m = output.get("node_interval_inflows") or {}
+        scope_map = {str(nid): (vals.get(ch) if isinstance(vals, dict) else []) for nid, vals in m.items()}
+        scope_label = "节点"
+    else:
+        m = output.get("node_interval_outflows") or {}
+        scope_map = {str(nid): (vals.get(ch) if isinstance(vals, dict) else []) for nid, vals in m.items()}
+        scope_label = "节点"
+
+    keys = sorted(str(k) for k in scope_map.keys())
+    if not keys:
+        st.info(f"通道 {ch} 下无可展示的{scope_label}数据")
+        return
+    if metric == "河段区间流量":
+        pick = st.selectbox(
+            scope_label,
+            options=keys,
+            key=f"interval_scope_pick_{metric}",
+            format_func=lambda x: _reach_node_pair_label(str(x), aux=aux),
+        )
+        pick_label = _reach_node_pair_label(str(pick), aux=aux)
+    else:
+        node_name_map = aux.get("node_name_map") or {}
+        pick = st.selectbox(
+            scope_label,
+            options=keys,
+            key=f"interval_scope_pick_{metric}",
+            format_func=lambda x, m=node_name_map: _node_display_label(str(x), m),
+        )
+        pick_label = _node_display_label(str(pick), node_name_map)
+    values = _slice_map({str(pick): list(scope_map.get(str(pick), []) or [])}, d0).get(str(pick), [])
+    if len(values) != len(display_times):
+        values = list(values)[: len(display_times)] + [float("nan")] * max(0, len(display_times) - len(values))
+
+    st.subheader(f"{metric} · 通道 {ch} · {scope_label} {pick_label}")
+    _configure_matplotlib_fonts()
+    fig, ax = plt.subplots(figsize=(10, 3.6))
+    ax.plot(x_dt, _to_float_series(values), color="#4C78A8", linewidth=1.2)
+    ax.set_ylabel("流量 (m³/s)")
+    ax.grid(True, alpha=0.25)
+    _style_ax_time_x(ax, x_dt, day_precision=day_p)
+    fig.tight_layout()
+    _st_pyplot(fig)
+
+    t_cells = _time_cell_strings(pd.to_datetime(display_times), day_precision=day_p)
+    rows = []
+    vals_f = _to_float_series(values)
+    for i, t in enumerate(display_times):
+        rows.append(
+            {
+                "时间": t_cells[i] if i < len(t_cells) else _format_ts(t, day_p),
+                "区间流量(m³/s)": vals_f[i] if i < len(vals_f) else None,
+            }
+        )
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, height=260)
 
 
 def _plot_station_tab(
@@ -925,8 +1044,8 @@ def main() -> None:
     hist_ui = int(side["historical_steps"])
     fs_idx = int(aux.get("forecast_start_idx", 0))
 
-    tab_node, tab_runoff, tab_routed, tab_reach, tab_station, tab_dbg, tab_json = st.tabs(
-        ["Node 流量", "流域产流", "流域汇流", "河段", "测站数据", "Debug", "JSON"]
+    tab_node, tab_runoff, tab_routed, tab_reach, tab_interval, tab_station, tab_dbg, tab_json = st.tabs(
+        ["Node 流量", "流域产流", "流域汇流", "河段", "区间通道", "测站数据", "Debug", "JSON"]
     )
 
     node_name_map = aux.get("node_name_map") or {}
@@ -1001,6 +1120,9 @@ def main() -> None:
         else:
             pick = st.selectbox("河段", options=rkeys)
             _plot_reach_tab(out, times, hist_ui, fs_idx, pick, aux)
+
+    with tab_interval:
+        _plot_interval_channel_tab(out, aux, times, hist_ui, fs_idx)
 
     with tab_station:
         kind = st.selectbox("测站类型", options=["雨量站", "蒸发站", "气温站", "流量站"])

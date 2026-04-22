@@ -363,6 +363,62 @@ def _require_scheme_keys(scheme_data: Dict[str, Any]) -> None:
         )
 
 
+def _parse_custom_interval_channels(
+    config_src: Dict[str, Any],
+    *,
+    node_ids: Set[str],
+) -> List[Dict[str, Any]]:
+    """
+    解析区间伴随流通道配置。
+
+    约定：
+    - 始终包含隐式 ``default`` 通道
+    - 可选读取 ``custom_interval_channels`` 列表
+    - 每个通道需包含 ``name`` 与 ``boundary_node_ids``（节点 id 列表）
+    """
+    channels: List[Dict[str, Any]] = []
+    raw = config_src.get("custom_interval_channels")
+    if raw is None:
+        return [{"name": "default", "boundary_node_ids": []}]
+    if not isinstance(raw, list):
+        raise ValueError("custom_interval_channels must be a list")
+
+    seen: Set[str] = set()
+    default_boundaries: List[str] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ValueError(f"custom_interval_channels[{i}] must be an object")
+        name = str(item.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"custom_interval_channels[{i}] missing name")
+        if name in seen:
+            raise ValueError(f"Duplicated interval channel name: {name!r}")
+        bnodes_raw = item.get("boundary_node_ids", [])
+        if not isinstance(bnodes_raw, list):
+            raise ValueError(
+                f"custom_interval_channels[{i}].boundary_node_ids must be a list"
+            )
+        bnodes: List[str] = []
+        for j, nid in enumerate(bnodes_raw):
+            sid = str(nid).strip()
+            if not sid:
+                raise ValueError(
+                    f"custom_interval_channels[{i}].boundary_node_ids[{j}] is empty"
+                )
+            if sid not in node_ids:
+                raise ValueError(
+                    f"custom_interval_channels[{i}] unknown boundary node id: {sid!r}"
+                )
+            bnodes.append(sid)
+        if name == "default":
+            default_boundaries = bnodes
+            seen.add(name)
+            continue
+        channels.append({"name": name, "boundary_node_ids": bnodes})
+        seen.add(name)
+    return [{"name": "default", "boundary_node_ids": default_boundaries}] + channels
+
+
 def flatten_stations_catalog(raw: Any) -> List[Dict[str, Any]]:
     """
     将方案中的 ``stations`` 元数据规范为扁平列表，便于校验与 UI 展示。
@@ -520,6 +576,10 @@ def load_scheme_from_json(
         )
         scheme.add_reach(reach)
     _bind_node_reaches_from_edges(scheme)
+    scheme.custom_interval_channels = _parse_custom_interval_channels(
+        config_src,
+        node_ids={str(k) for k in scheme.nodes.keys()},
+    )
 
     # ------------------------------------------------------------
     # Catchment 拓扑推导：配置层面尽量只保留单向关联。
@@ -852,6 +912,19 @@ def _serialize_result(
         "catchment_debug_traces": result.catchment_debug_traces,
         "reach_flows": {
             reach_id: _engine_series_to_json_list(series) for reach_id, series in result.reach_flows.items()
+        },
+        "interval_channels": list(result.interval_channels),
+        "node_interval_inflows": {
+            nid: {ch: _engine_series_to_json_list(ts) for ch, ts in cmap.items()}
+            for nid, cmap in result.node_interval_inflows.items()
+        },
+        "node_interval_outflows": {
+            nid: {ch: _engine_series_to_json_list(ts) for ch, ts in cmap.items()}
+            for nid, cmap in result.node_interval_outflows.items()
+        },
+        "reach_interval_flows": {
+            ch: {rid: _engine_series_to_json_list(ts) for rid, ts in rmap.items()}
+            for ch, rmap in result.reach_interval_flows.items()
         },
     }
     if tc is not None:

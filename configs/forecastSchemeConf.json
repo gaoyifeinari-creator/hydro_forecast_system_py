@@ -28,9 +28,7 @@
             ],
             "sub_sources": []
           }
-         
         ],
-        
         "distribution_params": []
       },
       "nodes": [
@@ -52,7 +50,7 @@
         {
           "id": "154195",
           "name": "俄公堡",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "154191",
             "1541951",
@@ -67,7 +65,7 @@
         {
           "id": "154034",
           "name": "卡基娃",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "154034",
             "154846",
@@ -82,7 +80,7 @@
         {
           "id": "154850",
           "name": "上通坝",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "1548551",
             "15485510",
@@ -2187,9 +2185,7 @@
             ],
             "sub_sources": []
           }
-         
         ],
-        
         "distribution_params": []
       },
       "nodes": [
@@ -2211,7 +2207,7 @@
         {
           "id": "154195",
           "name": "俄公堡",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "154191",
             "1541951",
@@ -2226,7 +2222,7 @@
         {
           "id": "154034",
           "name": "卡基娃",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "154034",
             "154846",
@@ -2241,7 +2237,7 @@
         {
           "id": "154850",
           "name": "上通坝",
-          "type": "cross_section",
+          "type": "reservoir",
           "local_catchment_ids": [
             "1548551",
             "15485510",

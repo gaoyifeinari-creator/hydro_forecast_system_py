@@ -3,6 +3,8 @@ from __future__ import annotations
 import _sys_path  # noqa: F401
 
 import unittest
+import json
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -54,6 +56,10 @@ class TestJsonConfigPipeline(unittest.TestCase):
         self.assertEqual(len(scheme.catchments), 2)
         self.assertEqual(time_context.step_count, 5)
         self.assertEqual(len(binding_specs), 2)
+        self.assertEqual(
+            scheme.custom_interval_channels,
+            [{"name": "default", "boundary_node_ids": []}],
+        )
 
         self.assertEqual(scheme.nodes["N1"].name, "上游常规节点1")
         self.assertEqual(scheme.nodes["N4"].name, "分流节点4")
@@ -94,13 +100,99 @@ class TestJsonConfigPipeline(unittest.TestCase):
         self.assertIn("node_total_inflows", output)
         self.assertIn("time_context", output)
         self.assertIn("display_results", output)
+        self.assertIn("interval_channels", output)
+        self.assertIn("node_interval_inflows", output)
+        self.assertIn("node_interval_outflows", output)
+        self.assertIn("reach_interval_flows", output)
+        self.assertIn("default", output["interval_channels"])
         for _k, disp in output["display_results"].items():
             self.assertIsInstance(disp, dict)
             self.assertIn("deterministic", disp)
+        self.assertTrue(
+            any(k.startswith("node_interval_inflow:default:") for k in output["display_results"].keys())
+        )
         self.assertIn("R5", output["reach_flows"])
         # 当前示例的分流节点参数可能使得旁路分量为 0（即 `R5` 全为 0）。
         # 这里更稳健地断言主干河道 `R4` 必须产生正流量。
         self.assertTrue(any(v > 0.0 for v in output["reach_flows"]["R4"]))
+
+    def test_load_scheme_with_custom_interval_channels(self) -> None:
+        config_path = _PROJECT_ROOT / "configs" / "example_forecast_config.json"
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        data["schemes"][0]["custom_interval_channels"] = [
+            {
+                "name": "generalized_A_to_D",
+                "boundary_node_ids": ["N1", "N6"],
+            }
+        ]
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
+        ) as f:
+            json.dump(data, f, ensure_ascii=False)
+            tmp = f.name
+        try:
+            scheme, _, _ = load_scheme_from_json(
+                tmp,
+                time_type="Hour",
+                step_size=1,
+                warmup_start_time=datetime(2026, 1, 1, 0, 0, 0),
+            )
+            self.assertEqual(
+                scheme.custom_interval_channels,
+                [
+                    {"name": "default", "boundary_node_ids": []},
+                    {
+                        "name": "generalized_A_to_D",
+                        "boundary_node_ids": ["N1", "N6"],
+                    },
+                ],
+            )
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+
+    def test_load_scheme_with_explicit_default_interval_boundaries(self) -> None:
+        config_path = _PROJECT_ROOT / "configs" / "example_forecast_config.json"
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        data["schemes"][0]["custom_interval_channels"] = [
+            {
+                "name": "default",
+                "boundary_node_ids": ["N1", "N6"],
+            },
+            {
+                "name": "generalized_A_to_D",
+                "boundary_node_ids": ["N3"],
+            },
+        ]
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
+        ) as f:
+            json.dump(data, f, ensure_ascii=False)
+            tmp = f.name
+        try:
+            scheme, _, _ = load_scheme_from_json(
+                tmp,
+                time_type="Hour",
+                step_size=1,
+                warmup_start_time=datetime(2026, 1, 1, 0, 0, 0),
+            )
+            self.assertEqual(
+                scheme.custom_interval_channels,
+                [
+                    {"name": "default", "boundary_node_ids": ["N1", "N6"]},
+                    {
+                        "name": "generalized_A_to_D",
+                        "boundary_node_ids": ["N3"],
+                    },
+                ],
+            )
+        finally:
+            Path(tmp).unlink(missing_ok=True)
 
     def test_run_calculation_scenario_rainfall_multiscenario(self) -> None:
         """预报面雨 CSV 注入 + 三情景引擎输出键。"""

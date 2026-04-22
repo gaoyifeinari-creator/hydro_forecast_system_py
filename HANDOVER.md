@@ -415,6 +415,46 @@ python -m unittest discover -v
      - 日标签 +1 天；
      - Day/Hour 模式下 `latest_ftime_end` 行为。
 
+### 10.13 区间通道（多通道伴随流）与水库边界识别（2026-04-22）
+
+本轮新增并收口了“区间流量”能力，核心是把总流量与区间流量并行维护，并提供可视化与配置兜底。
+
+1. **区间通道数据结构下沉**
+   - `CalculationResult` 新增：
+     - `interval_channels`
+     - `node_interval_inflows`
+     - `node_interval_outflows`
+     - `reach_interval_flows`
+   - `get_display_results()` 新增区间键：
+     - `node_interval_inflow:<channel>:<node_id>`
+     - `node_interval_outflow:<channel>:<node_id>`
+     - `reach_interval:<channel>:<reach_id>`
+
+2. **default 通道规则**
+   - 默认语义：`default` 通道以“水库节点”为边界清零（标准相邻水库区间）。
+   - 兼容兜底：支持在 `custom_interval_channels` 中显式给 `default.boundary_node_ids`，并与自动识别到的水库节点并集。
+   - 这样即使某方案把业务水库建成 `cross_section`，仍可通过配置显式边界实现截断。
+
+3. **配置解析细节**
+   - `custom_interval_channels` 解析支持显式 `default` 条目，不再因内置默认而与用户配置冲突。
+   - 若未配置 `custom_interval_channels`，仍自动注入 `default`。
+
+4. **Web 可视化增强**
+   - `web_calculation_app.py` 新增“区间通道”标签页。
+   - 河段展示标签改为“上游节点名 -> 下游节点名”。
+   - 节点选择优先展示节点名称。
+
+5. **运行时排查日志**
+   - `calculation_pipeline_runner.py` 新增：
+     - `[interval][debug] loaded scheme node-types ...`
+   - 用于快速确认本次运行实际识别到的水库节点数量及关键节点是否被识别为水库。
+   - 该日志用于定位“编辑器显示与运行读取不一致（未保存/缓存/路径混用）”问题。
+
+6. **文档与测试**
+   - 新增文档：`docs/INTERVAL_CHANNELS.md`
+   - 新增测试：`tests/test_interval_tracking.py`
+   - 增强测试：`tests/test_json_config_pipeline.py`（区间字段与 default 显式边界解析）
+
 ---
 
 ## 11. 版本与变更记录（摘要）
