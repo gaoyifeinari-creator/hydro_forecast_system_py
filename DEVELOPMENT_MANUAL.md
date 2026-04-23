@@ -171,8 +171,8 @@ hydro_project/
 - `hydro_engine/io/json_config.py`
   - JSON 方案加载、模型对象构建、从配置一键计算入口。
   - **`apply_realtime_forecast_observed_meteorology_cutoff(station_packages, time_context=...)`**：实时预报下将各测站 **P / PET / 气温** 从 **预报起点 T0（含）** 至序列末尾置 **0**（原地修改），表示 T0 起不再使用“实测”气象强迫（与业务上“T0 为第一个预报步、该步尚无实测”一致）。
-  - **`run_calculation_from_json(..., forecast_mode=...)`**：在 `forecast_mode="realtime_forecast"` 时内部调用上述截断后再入池计算；`historical_simulation` 不截断。
-  - **`run_calculation_from_json(..., catchment_scenario_rainfall=..., scenario_precipitation=..., forecast_multiscenario=...)`**（关键字参数）：子流域强迫经 `CatchmentDataSynthesizer` 合成后，可按 `CatchmentForecastRainfall` 字典 **覆写预报段** 降水（及可选 PET）；`forecast_multiscenario=True` 时对 expected/upper/lower 各跑一遍引擎，主结果序列仍由 `scenario_precipitation` 决定，完整三情景见返回字典 **`multiscenario_engine_outputs`**。详见 `hydro_engine/forecast/scenario_forcing.py`。
+  - **`run_calculation_from_json(..., forecast_mode=...)`**：在 `forecast_mode="realtime_forecast"` 时内部调用上述截断后再入池计算；`historical_simulation` 不截断，且按模式规则禁用数值预报面雨注入。
+  - **`run_calculation_from_json(..., catchment_scenario_rainfall=..., scenario_precipitation=..., forecast_multiscenario=...)`**（关键字参数）：子流域强迫经 `CatchmentDataSynthesizer` 合成后，可按 `CatchmentForecastRainfall` 字典 **覆写预报段** 降水（及可选 PET）；该覆写仅在实时预报模式启用。`forecast_multiscenario=True` 时对 expected/upper/lower 各跑一遍引擎，主结果序列仍由 `scenario_precipitation` 决定，完整三情景见返回字典 **`multiscenario_engine_outputs`**。详见 `hydro_engine/forecast/scenario_forcing.py`。
 - `hydro_engine/io/calculation_app_data_loader.py`
   - 桌面/Web/率定场景读数辅助：
   - 从 JDBC 配置或 CSV 读取测站时序；识别 Hour/Day 读取源（`HOURDB`/`DAYDB`）。
@@ -220,7 +220,7 @@ hydro_project/
   - 读取测站数据（同库 **一次 IN**、实时 **`t_end` 截断** + CSV 时间裁剪）、拼装引擎输入（`station_packages` / `observed_flows`）、
   - 组装前端所需 aux（测站序列、子流域面雨量等），并支持 `compute_forecast` 开关与内存缓存复用。
   - **实时预报（`forecast_mode=realtime_forecast`）**：在生成 aux **之前**对 `station_packages` 做与 `run_calculation_from_json` 一致的 **T0 起气象截断**；面雨量 **`catchment_rain`** 使用 `build_catchment_precip_series_from_station_packages`，避免仍从 `rain_df` 取 T0 的“实测”显示。
-  - **`runtime_cache`**：含 **`binding_specs`**、**`catchment_scenario_rainfall`**（若配置情景 CSV）、**`forecast_scenario_precipitation`**、**`forecast_run_multiscenario`** 等；供 `run_forecast_from_runtime_cache` 在计算后按修补后的包 **重写 aux**（先读数再单独点“预报计算”时与引擎输入一致）。
+  - **`runtime_cache`**：含 **`binding_specs`**、**`catchment_scenario_rainfall`**（实时模式下可有情景/预报面雨）、**`forecast_scenario_precipitation`**、**`forecast_run_multiscenario`** 等；供 `run_forecast_from_runtime_cache` 在计算后按修补后的包 **重写 aux**（先读数再单独点“预报计算”时与引擎输入一致）。
 - `scripts/web_calculation_app.py`
   - Streamlit 调试应用入口。
 - `scripts/calculation_app_common.py`
@@ -303,7 +303,7 @@ from hydro_engine import ForecastSession, ForecastingScheme, CalculationEngine, 
 8. 调用 `build_catchment_precip_series_from_station_packages(...)` 生成 **`catchment_rain`**（与 `station_packages` 一致）
 9. 组装 `aux`（`station_precip` / `station_pet` / `station_temp` / `catchment_rain` 等）并写入 **`runtime_cache`**（含 **`binding_specs`**）
 10. 若 `compute_forecast=True`：调用 `run_calculation_from_json(...)`；其中实时模式会再次对 `station_packages` 做同一截断（幂等）
-11. （可选）若配置了预报情景面雨 CSV：读入 **`catchment_scenario_rainfall`** 写入 `runtime_cache`，计算时传入 `run_calculation_from_json`；CSV 首时刻须与 **`forecast_start_time`** 对齐，步长与预报段步数一致（见 `scenario_forcing.py` 文档字符串）。
+11. （实时模式可选）若配置了预报情景面雨 CSV：读入 **`catchment_scenario_rainfall`** 写入 `runtime_cache`，计算时传入 `run_calculation_from_json`；CSV 首时刻须与 **`forecast_start_time`** 对齐，步长与预报段步数一致（见 `scenario_forcing.py` 文档字符串）。历史模拟模式下会跳过 CSV/DB 预报面雨并忽略该注入。
 
 **说明**：率定等路径若仍用 `build_catchment_precip_series(rain_df, ...)` 而不经过上述截断，行为与“未做实时业务约束”的原始库表一致，属预期差异。Web 通用入口以 `station_packages` 为准对齐引擎。
 
@@ -332,10 +332,10 @@ from hydro_engine import ForecastSession, ForecastingScheme, CalculationEngine, 
 
 仅依赖 `apply_realtime_forecast_observed_meteorology_cutoff` 置零，仍可能在「回算历史某 T0」时从库中读到 **T0 之后才入库的实况**，与当时业务可获信息不一致。当前约定：**实时模式读库 `t_end` 与全站类型一致**，避免拉取 T0 后的任何测站记录；无预报面雨时预报段强迫仍由截断/合成得到 **0** 或由 **情景 CSV 覆写**。
 
-### 5.3 预报情景面雨（可选）
+### 5.3 预报情景面雨（实时模式可选）
 
 - **入口**：`hydro_engine/forecast/scenario_forcing.py` 的 `load_catchment_forecast_rainfall_map_from_csv`、`patch_catchment_scenario_precipitation`。
-- **串联**：`run_calculation_from_json` 在合成 `catchment_forcing` 后 `deepcopy` 再覆写 **预报段**；Web/pipeline 通过 `forecast_scenario_rain_csv` 等参数加载并缓存。
+- **串联**：`run_calculation_from_json` 在合成 `catchment_forcing` 后 `deepcopy` 再覆写 **预报段**；Web/pipeline 通过 `forecast_scenario_rain_csv` 等参数加载并缓存。历史模拟模式下该覆写会被忽略。
 - **CSV 列**：`time`、`expected`、`upper`、`lower`；可选 `pet`；可选 **`catchment_id`** 多流域（无该列时须在 UI/参数中指定唯一子流域 id）。
 
 ### 5.4 数据流程详解
@@ -403,7 +403,7 @@ flowchart TB
   D1 --> E1 --> E2
 ```
 
-说明：**子图「实时预报分支」**（R1/R2）仅在 **`forecast_mode=realtime_forecast`** 时执行；历史模拟下 C4 后直接进入组装缓存（可视为跳过 R1/R2）。**`B4`** 仅在实时模式且 DataFrame 含可解析时间列时执行。**`D2`** 在 pipeline 读数阶段即可执行，结果写入 `runtime_cache`，计算阶段传入 `E1`。
+说明：**子图「实时预报分支」**（R1/R2）仅在 **`forecast_mode=realtime_forecast`** 时执行；历史模拟下 C4 后直接进入组装缓存（可视为跳过 R1/R2）。**`B4`** 仅在实时模式且 DataFrame 含可解析时间列时执行。**`D2`** 在实时模式下可执行并写入 `runtime_cache`，历史模拟模式跳过该分支。
 
 #### 5.4.3 `run_calculation_from_json` 内部（与 pipeline 的关系）
 
@@ -438,7 +438,8 @@ flowchart LR
 | 库表 **`t_end`** | **`station_observation_query_end_realtime`**（不含 T0 及以后） | **`time_context.end_time`**（全时段） |
 | CSV 行裁剪 | **`clip_station_dataframe_rows_before_forecast_start`**（去掉 ≥T0） | 一般不裁（`station_table_query_end` 为空） |
 | **`station_packages` 截断** | T0 起 P/PET/气温 **置 0**（pipeline 与 `run_calculation_from_json` 各一次，幂等） | **不截断** |
-| 预报段面雨来源 | 合成（截断后多为 0）或 **情景 CSV 覆写** | 合成或情景覆写；站网实况可贯穿全时段 |
+| 预报段面雨来源 | 合成（截断后多为 0）或 **情景 CSV/DB 预报面雨覆写** | **全时段测站聚合实况面雨**（不使用情景/预报面雨覆写） |
+| 节点预报段接力 | `use_observed_for_routing=true` 时，预报段不延续接力（只到起报边界） | 仅 `ReservoirNode` 允许预报段继续实测接力；`CrossSectionNode` 预报段仍走计算出流 |
 
 #### 5.4.5 `runtime_cache` 中与数据流相关的键
 

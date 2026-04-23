@@ -794,7 +794,8 @@ def run_calculation_from_json(
             node,
             "use_observed_for_routing_after_forecast",
             bool(getattr(node, "use_observed_for_routing", False))
-            and resolved_mode == "historical_simulation",
+            and resolved_mode == "historical_simulation"
+            and isinstance(node, ReservoirNode),
         )
 
     # 按模式后的输入合成流域强迫。
@@ -817,6 +818,9 @@ def run_calculation_from_json(
     }
 
     scenario_map = catchment_scenario_rainfall or {}
+    # 历史模拟：全时段子流域面雨来自测站聚合实况，不注入数值预报/情景面雨（与管线一致）。
+    if resolved_mode == "historical_simulation":
+        scenario_map = {}
     primary_scen = str(scenario_precipitation or "expected").strip().lower()
     if primary_scen not in {"expected", "upper", "lower"}:
         raise ValueError(
@@ -982,7 +986,17 @@ def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
     # 节点一级字段：实测站与接力开关，默认来自新版；若节点顶级没配置则尝试从旧 correction 中回填。
     station_binding = node_data.get("station_binding") or {}
 
-    # `observed_station_id`：用于“节点输出”接力/缝合（cross_section 输出=输入；reservoir 输出=出库）
+    # `observed_station_id`：用于“节点输出”接力/缝合（cross_section 输出=输入；reservoir 输出=出库）。
+    # 关键兼容：当节点类型从 reservoir 改为 cross_section 时，应默认回到 flow_station_id，
+    # 不能继续优先 outflow_station_id，否则会出现“配置改成水文站后仍读出库站”的现象。
+    if str(node_type).strip().lower() == "reservoir":
+        default_observed_station_id = (
+            station_binding.get("outflow_station_id") or station_binding.get("flow_station_id") or ""
+        )
+    else:
+        default_observed_station_id = (
+            station_binding.get("flow_station_id") or station_binding.get("outflow_station_id") or ""
+        )
     observed_station_id = str(
         node_data.get(
             "observed_station_id",
@@ -990,7 +1004,7 @@ def _build_node(node_data: Dict[str, Any]) -> AbstractNode:
                 "observed_outflow_station_id",
                 (correction_raw or {}).get(
                     "observed_station_id",
-                    station_binding.get("outflow_station_id") or station_binding.get("flow_station_id") or "",
+                    default_observed_station_id,
                 ),
             ),
         )

@@ -928,46 +928,57 @@ def run_calculation_pipeline(
     )
     warns.extend(rain_warns or [])
 
-    scenario_rain_map = _load_catchment_scenario_rain_map(
-        forecast_scenario_rain_csv,
-        forecast_scenario_default_catchment_ids,
-        on_log=on_log,
-    )
+    fs_idx = _compute_forecast_start_idx(time_context)
     forecast_rain_ftime_info: Dict[str, Any] = {}
-    if not scenario_rain_map:
-        scenario_rain_map = _load_forecast_rain_from_scheme_db(
-            config_path=config_used_path,
-            jdbc_config_path=str(jdbc_config_path or ""),
-            time_type=str(time_type),
-            step_size=int(step_size),
-            time_context=time_context,
-            dbtype=int(dbtype),
-            on_log=on_log,
-            debug_info_out=forecast_rain_ftime_info,
-        )
-    if scenario_rain_map:
+    is_historical_simulation = str(forecast_mode).strip().lower() == "historical_simulation"
+
+    if is_historical_simulation:
+        scenario_rain_map: Dict[str, CatchmentForecastRainfall] = {}
         _log(
-            f"[forecast_scenario_rain] loaded catchments={sorted(scenario_rain_map.keys())} "
-            f"scenario={forecast_scenario_precipitation!r} multiscenario={forecast_run_multiscenario}",
+            "[forecast_scenario_rain] historical_simulation: skip CSV/DB numerical forecast areal rain; "
+            "catchment rain is station-synthesized for the full window",
             on_log,
         )
+        catchment_rain_ui = {str(k): list(v) for k, v in (catchment_rain or {}).items()}
+    else:
+        scenario_rain_map = _load_catchment_scenario_rain_map(
+            forecast_scenario_rain_csv,
+            forecast_scenario_default_catchment_ids,
+            on_log=on_log,
+        )
+        if not scenario_rain_map:
+            scenario_rain_map = _load_forecast_rain_from_scheme_db(
+                config_path=config_used_path,
+                jdbc_config_path=str(jdbc_config_path or ""),
+                time_type=str(time_type),
+                step_size=int(step_size),
+                time_context=time_context,
+                dbtype=int(dbtype),
+                on_log=on_log,
+                debug_info_out=forecast_rain_ftime_info,
+            )
+        if scenario_rain_map:
+            _log(
+                f"[forecast_scenario_rain] loaded catchments={sorted(scenario_rain_map.keys())} "
+                f"scenario={forecast_scenario_precipitation!r} multiscenario={forecast_run_multiscenario}",
+                on_log,
+            )
 
-    fs_idx = _compute_forecast_start_idx(time_context)
-    forecast_times = pd.DatetimeIndex(times[fs_idx:])
-    scenario_rain_map = _align_scenario_rainfall_to_engine_grid(
-        scenario_rain_map=scenario_rain_map,
-        forecast_times=forecast_times,
-        time_step=time_context.time_delta,
-        precipitation_field=str(forecast_scenario_precipitation or "expected"),
-        dbtype=int(dbtype),
-    )
-    catchment_rain_ui = _overlay_forecast_rain_to_catchment_series(
-        base_series=catchment_rain,
-        scenario_rain_map=scenario_rain_map,
-        times=times,
-        forecast_start_idx=fs_idx,
-        precipitation_field=str(forecast_scenario_precipitation or "expected"),
-    )
+        forecast_times = pd.DatetimeIndex(times[fs_idx:])
+        scenario_rain_map = _align_scenario_rainfall_to_engine_grid(
+            scenario_rain_map=scenario_rain_map,
+            forecast_times=forecast_times,
+            time_step=time_context.time_delta,
+            precipitation_field=str(forecast_scenario_precipitation or "expected"),
+            dbtype=int(dbtype),
+        )
+        catchment_rain_ui = _overlay_forecast_rain_to_catchment_series(
+            base_series=catchment_rain,
+            scenario_rain_map=scenario_rain_map,
+            times=times,
+            forecast_start_idx=fs_idx,
+            precipitation_field=str(forecast_scenario_precipitation or "expected"),
+        )
 
     # 8) aux：测站序列
     station_precip, station_pet, station_temp = _build_station_series_maps(
@@ -1049,6 +1060,7 @@ def run_calculation_pipeline(
     aux_base: Dict[str, Any] = {
         "time_type": str(time_context.time_type.value),
         "dbtype": int(dbtype),
+        "forecast_mode": str(forecast_mode).strip().lower(),
         "forecast_start_idx": fs_idx,
         "node_observed_inflows": node_observed_inflows,
         "node_observed_outflows": node_observed_outflows,
@@ -1173,13 +1185,21 @@ def run_forecast_from_runtime_cache(
         else bool(runtime_cache.get("forecast_run_multiscenario"))
     )
     fs_idx = _compute_forecast_start_idx(time_context)
-    scen_map = _align_scenario_rainfall_to_engine_grid(
-        scenario_rain_map=scen_map or {},
-        forecast_times=pd.DatetimeIndex(times[fs_idx:]),
-        time_step=time_context.time_delta,
-        precipitation_field=scen_precip,
-        dbtype=int(aux_base.get("dbtype", -1)),
-    )
+    if str(forecast_mode).strip().lower() == "historical_simulation":
+        scen_map = {}
+        _log(
+            "[forecast_scenario_rain] historical_simulation: ignore cached/aligned scenario rain "
+            "(full-window station-synthesized areal rain only)",
+            on_log,
+        )
+    else:
+        scen_map = _align_scenario_rainfall_to_engine_grid(
+            scenario_rain_map=scen_map or {},
+            forecast_times=pd.DatetimeIndex(times[fs_idx:]),
+            time_step=time_context.time_delta,
+            precipitation_field=scen_precip,
+            dbtype=int(aux_base.get("dbtype", -1)),
+        )
 
     out = run_calculation_from_json(
         config_path=config_used_path,
@@ -1197,6 +1217,7 @@ def run_forecast_from_runtime_cache(
 
     aux = dict(aux_base)
     aux["_runtime_cache"] = runtime_cache
+    aux["forecast_mode"] = str(forecast_mode).strip().lower()
 
     # 保险：forecast_start_idx / time_type 以当前 time_context 为准
     try:
@@ -1230,6 +1251,41 @@ def run_forecast_from_runtime_cache(
                 times=times,
                 forecast_start_idx=fs_idx,
                 precipitation_field=scen_precip,
+            )
+            aux["station_precip"] = sp
+            aux["station_pet"] = spt
+            aux["station_temp"] = st
+            aux["catchment_rain"] = cr
+            try:
+                ab = dict(runtime_cache.get("aux_base") or {})
+                ab.update(
+                    {
+                        "station_precip": sp,
+                        "station_pet": spt,
+                        "station_temp": st,
+                        "catchment_rain": cr,
+                    }
+                )
+                runtime_cache["aux_base"] = ab
+            except Exception:
+                pass
+
+    elif str(forecast_mode).strip().lower() == "historical_simulation":
+        bs = runtime_cache.get("binding_specs")
+        if bs is None:
+            try:
+                _, bs, _ = load_scheme_from_json(
+                    file_path=config_used_path,
+                    time_type=str(time_type),
+                    step_size=int(step_size),
+                    warmup_start_time=warmup_start_time,
+                )
+            except Exception:
+                bs = None
+        if bs is not None:
+            sp, spt, st = _build_station_series_maps(station_packages=station_packages)
+            cr, _ = build_catchment_precip_series_from_station_packages(
+                bs, station_packages, len(times)
             )
             aux["station_precip"] = sp
             aux["station_pet"] = spt

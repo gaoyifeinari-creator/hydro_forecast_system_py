@@ -65,7 +65,7 @@
 | `load_scheme_from_json` | `(path, time_type: str, step_size: int, warmup_start_time: datetime \| None) -> (scheme, binding_specs, ForecastTimeContext)`；**有 `schemes` 时须传 `warmup_start_time`** |
 | `build_catchment_forcing_from_station_packages` | 同上，增加 `warmup_start_time`，返回 `(scheme, catchment_forcing, time_context)` |
 | `apply_realtime_forecast_observed_meteorology_cutoff` | `(station_packages, *, time_context)`：**原地**将各站 **P / PET / 气温** 从 **预报起点 T0（索引含 T0）** 至末尾置 **0**；业务含义为实时预报下 T0 起不使用“实测”气象。 |
-| `run_calculation_from_json` | 位置参数同上；**仅关键字参数**：`catchment_scenario_rainfall`、`scenario_precipitation`、`forecast_multiscenario`（预报情景面雨与三情景引擎）。`station_packages` 为 `Dict[station_id, ForcingData]`。`forecast_mode="realtime_forecast"` 时**在入池计算前**调用上述截断；`historical_simulation` 不截断。`forecast_multiscenario=True` 时返回字典键 **`multiscenario_engine_outputs`**。详见 `DEVELOPMENT_MANUAL.md` §5.3、`hydro_engine/forecast/scenario_forcing.py`。 |
+| `run_calculation_from_json` | 位置参数同上；**仅关键字参数**：`catchment_scenario_rainfall`、`scenario_precipitation`、`forecast_multiscenario`（预报情景面雨与三情景引擎）。`station_packages` 为 `Dict[station_id, ForcingData]`。`forecast_mode="realtime_forecast"` 时**在入池计算前**调用上述截断；`historical_simulation` 不截断。历史模拟节点接力口径：仅 `ReservoirNode` 在预报段可继续实测接力，`CrossSectionNode` 预报段仍走计算流量。`forecast_multiscenario=True` 时返回字典键 **`multiscenario_engine_outputs`**。详见 `DEVELOPMENT_MANUAL.md` §5.3、`hydro_engine/forecast/scenario_forcing.py`。 |
 
 新安江 / XAJCS：**必须**提供 `precipitation` 与 `potential_evapotranspiration`。
 
@@ -457,6 +457,21 @@ python -m unittest discover -v
 
 ---
 
+### 10.14 历史模拟节点接力口径调整（2026-04-23）
+
+本次按业务需求收口历史模拟（`historical_simulation`）在预报段的节点传递逻辑：
+
+- 目标：历史模拟尽量消除“预报系统外部误差”（预报雨量、水库未来调蓄等），把误差聚焦到模型本身。
+- 规则：
+  - **水库节点（`ReservoirNode`）**：预报段允许继续使用实测出库接力向下游传递。
+  - **水文站节点（`CrossSectionNode`）**：预报段仍使用计算出流向下游传递，不延续实测接力。
+- 代码落点：`hydro_engine/io/json_config.py`
+  - 在 `run_calculation_from_json` 中设置 `use_observed_for_routing_after_forecast` 时，新增 `isinstance(node, ReservoirNode)` 条件。
+- 回归测试：`tests/test_node_observed_routing.py`
+  - 新增 `test_historical_mode_only_reservoir_keeps_observed_after_forecast`，验证“断面节点预报段回归计算、水库节点预报段继续实测接力”。
+
+---
+
 ## 11. 版本与变更记录（摘要）
 
 | 日期 | 摘要 |
@@ -471,6 +486,7 @@ python -m unittest discover -v
 | **2026-04-20**（更新 7） | **预报面雨时标统一**：`WEA_GFSFORRAIN` 作为前时标源，后时标方案只在整编锚点阶段做一次映射，去除后续二次平移；修正“展示前后错一格”问题。新增 `scripts/diagnose_scheme_conversion.py` 对账 XML/JSON 参数一致性。 |
 | **2026-04-21**（更新 8） | **配置去冗余收口 + NumPy 升级落地**：`stations.rain_gauges[*].unit` 移除（固定 mm）；`stations.reservoir` 移除（以 `nodes[].station_binding` 为单一来源）；`nodes[].incoming_reach_ids/outgoing_reach_ids` 停止维护并由 `reaches` 自动回填；预报雨 DB 参数统一从 `floodForecastJdbc.json.forecast_rain` 读取，`future_rainfall.db` 删除；预报源选择仅认 `selected_source_name`；`TimeSeries.values` 升级为 `np.ndarray`，`MuskingumRoutingModel` 支持集合维向量化。 |
 | **2026-04-22**（更新 9） | **预报面雨对账修复**：新增“多步长->1小时->自然日”编译模块；后时标小时映射修正为 `+1h`；日尺度改为“值不平移、仅标签 +1 天”；`Day` 模式 `latest_ftime_end` 对齐 HPS（同日+当前小时）；统一 `MAX(FTIME)` 批次策略；新增 `154034` 对账日志与回归测试。详见本文 §10.12。 |
+| **2026-04-23**（更新 10） | **历史模拟节点接力口径调整**：`historical_simulation` 下仅 `ReservoirNode` 在预报段继续实测接力，`CrossSectionNode` 预报段改为计算出流；并新增回归测试 `test_historical_mode_only_reservoir_keeps_observed_after_forecast`。详见本文 §10.14。 |
 
 ---
 

@@ -28,7 +28,9 @@
             ],
             "sub_sources": []
           }
+         
         ],
+        
         "distribution_params": []
       },
       "nodes": [
@@ -50,7 +52,7 @@
         {
           "id": "154195",
           "name": "俄公堡",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "154191",
             "1541951",
@@ -65,7 +67,7 @@
         {
           "id": "154034",
           "name": "卡基娃",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "154034",
             "154846",
@@ -80,7 +82,7 @@
         {
           "id": "154850",
           "name": "上通坝",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "1548551",
             "15485510",
@@ -2185,7 +2187,9 @@
             ],
             "sub_sources": []
           }
+         
         ],
+        
         "distribution_params": []
       },
       "nodes": [
@@ -2207,7 +2211,7 @@
         {
           "id": "154195",
           "name": "俄公堡",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "154191",
             "1541951",
@@ -2215,14 +2219,15 @@
           ],
           "station_binding": {
             "flow_station_id": "1541951005",
-            "stage_station_id": "-99"
+            "stage_station_id": "-99",
+            "outflow_station_id": "-99"
           },
           "use_observed_for_routing": true
         },
         {
           "id": "154034",
           "name": "卡基娃",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "154034",
             "154846",
@@ -2230,14 +2235,15 @@
           ],
           "station_binding": {
             "flow_station_id": "1540341000",
-            "stage_station_id": "-99"
+            "stage_station_id": "-99",
+            "outflow_station_id": "-99"
           },
           "use_observed_for_routing": true
         },
         {
           "id": "154850",
           "name": "上通坝",
-          "type": "reservoir",
+          "type": "cross_section",
           "local_catchment_ids": [
             "1548551",
             "15485510",
@@ -2254,7 +2260,8 @@
           ],
           "station_binding": {
             "flow_station_id": "1548501000",
-            "stage_station_id": "-99"
+            "stage_station_id": "-99",
+            "outflow_station_id": "-99"
           },
           "use_observed_for_routing": true
         }

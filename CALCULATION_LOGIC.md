@@ -129,11 +129,16 @@
 通过 `run_calculation_from_json(..., forecast_mode=...)` 控制：
 
 - `realtime_forecast`
-  - `forecast_start_time` 之后，站点实测气象不再用于产流（当前对 `precipitation` / `potential_evapotranspiration` / `air_temperature` 置零）。
-  - 节点 `use_observed_for_routing=true` 时，仅在 `t < forecast_start_time` 使用实测流量接力。
+  - 读数阶段：测站实况查询上界截断到 `forecast_start_time - time_delta`；文件兜底会裁掉 `>= forecast_start_time` 的行。
+  - 强迫阶段：`forecast_start_time`（含）之后，站点实测气象不再用于产流（当前对 `precipitation` / `potential_evapotranspiration` / `air_temperature` 置零）。
+  - 节点接力：`use_observed_for_routing=true` 时，仅在起报前使用实测流量接力。
+  - 面雨策略：允许使用数值预报面雨（CSV/DB）覆写预报段（按 `scenario_precipitation` 或多情景计算）。
+
 - `historical_simulation`
-  - `forecast_start_time` 之后继续使用实测气象参与产流计算。
-  - 节点 `use_observed_for_routing=true` 时，预报起报后也继续使用实测流量接力（等价于节点侧启用 `use_observed_for_routing_after_forecast`）。
+  - 读数阶段：测站实况按全窗读取（到 `time_context.end_time`），不做实时模式的 `t_end` 截断。
+  - 强迫阶段：站点实测气象全时段保留，不做 T0 置零。
+  - 节点接力（新增口径）：仅 **水库节点**（`reservoir`）在 `use_observed_for_routing=true` 时，预报起报后继续使用实测出库接力（节点侧启用 `use_observed_for_routing_after_forecast`）；**水文站节点**（`cross_section`）在预报段仍使用计算流量向下游传递。
+  - 面雨策略：**全时段纯实况面雨**（由测站聚合得到）；忽略 CSV/DB 数值预报面雨，不做预报段覆写。
 
 ### 4.5 节点出流 -> reach 演进
 

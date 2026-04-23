@@ -198,13 +198,18 @@ def _slice_map(m: Optional[Dict[str, List[float]]], start: int) -> Dict[str, Lis
     return out
 
 
-def _mask_observed_before_forecast(
+def _mask_observed_after_forecast_start_realtime_only(
     values: Optional[List[float]],
-    forecast_start_idx: int,
+    rel_forecast_start_idx: int,
 ) -> Optional[List[float]]:
+    """
+    仅用于实时预报的 Node 实测展示：在已对齐到 display_start 的序列上，
+    将「起报步及之后」(index >= rel_forecast_start_idx) 置为 None，避免展示未来「伪实况」。
+    历史模拟模式不得调用（应全窗展示实测）。
+    """
     if values is None:
         return None
-    fs = max(0, int(forecast_start_idx))
+    fs = max(0, int(rel_forecast_start_idx))
     return [v if i < fs else None for i, v in enumerate(values)]
 
 
@@ -320,8 +325,14 @@ def _plot_node_tab(
         oin = [None] * len(display_times)
     if len(oout) != len(display_times):
         oout = [None] * len(display_times)
-    oin = _mask_observed_before_forecast(oin, rel_fs) or [None] * len(display_times)
-    oout = _mask_observed_before_forecast(oout, rel_fs) or [None] * len(display_times)
+    mode = str(aux.get("forecast_mode", "realtime_forecast")).strip().lower()
+    if mode == "realtime_forecast":
+        oin = _mask_observed_after_forecast_start_realtime_only(oin, rel_fs) or [None] * len(
+            display_times
+        )
+        oout = _mask_observed_after_forecast_start_realtime_only(oout, rel_fs) or [None] * len(
+            display_times
+        )
 
     day_p = _is_day_precision(aux)
     t_idx = pd.to_datetime(display_times)
