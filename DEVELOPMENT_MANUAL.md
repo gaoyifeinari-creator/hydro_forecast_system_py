@@ -66,6 +66,8 @@ hydro_project/
 │  │  ├─ calculation_app_data_loader.py          # 应用层读数（DB/CSV、Hour/Day 源切换）
 │  │  ├─ calculation_app_data_builder.py         # DataFrame -> ForcingData/TimeSeries 构建
 │  │  ├─ calculation_app_data_processors.py      # 读取后标准化与可插拔处理管线（当前空处理）
+│  │  ├─ forecast_mode_policy.py                 # 预报模式统一策略（校验/分支判定）
+│  │  ├─ time_anchor_policy.py                   # 前后时标与读库锚点公共策略
 │  │  └─ project_config_qa.py                    # 配置 QA 校验（静态+试运行）
 │  ├─ models/                                    # 数学模型层
 │  │  ├─ __init__.py                             # 模型聚合导出
@@ -195,6 +197,10 @@ hydro_project/
   - `build_loaded_data_processors(time_type)`
   - `apply_loaded_data_processors(...)`
   - 当前默认空处理（不改变行为）
+- `hydro_engine/io/forecast_mode_policy.py`
+  - 统一 `forecast_mode` 策略入口：模式归一化与合法性校验、是否允许情景面雨注入、是否允许节点预报段实测接力（当前历史模拟仅 `ReservoirNode` 允许）。
+- `hydro_engine/io/time_anchor_policy.py`
+  - 统一前后时标（`dbtype`）锚点规则：预报起点解析、预报雨读库窗口、测站读窗平移、测站标签回拨。
 - `hydro_engine/io/project_config_qa.py`
   - 配置静态/运行期校验与问题清单输出。
 
@@ -502,6 +508,8 @@ sequenceDiagram
 - 单元/集成测试目录：`tests/`
 - 重点用例：
   - `test_json_config_pipeline.py`（含实时截断时刻、情景面雨多情景）
+  - `test_forecast_mode_policy.py`（模式策略入口：校验/注入/节点接力权限）
+  - `test_dbtype_time_anchor.py`（前后时标公共锚点策略）
   - `test_forecast_skeleton_pipeline.py`
   - `test_catchment_forecast_fusion.py`
   - `test_node_observed_routing.py`

@@ -79,6 +79,38 @@ def select_scheme_dict_smallest_step(
     return min(candidates, key=lambda x: int(x.get("step_size", 999999)))
 
 
+def resolve_scheme_for_time_scale(
+    config_path: str | Path,
+    *,
+    time_type: str,
+    step_size: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    读取配置并按 ``time_type + step_size`` 精确匹配一条 scheme。
+    """
+    schemes = read_schemes_list(config_path)
+    return select_scheme_dict_exact(
+        schemes,
+        time_type=str(time_type or ""),
+        step_size=int(step_size),
+    )
+
+
+def resolve_best_scheme_for_time_type(
+    config_path: str | Path,
+    *,
+    time_type: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    读取配置并按 ``time_type`` 选择最小 ``step_size`` 的 scheme。
+    """
+    schemes = read_schemes_list(config_path)
+    return select_scheme_dict_smallest_step(
+        schemes,
+        time_type=str(time_type or ""),
+    )
+
+
 def scheme_dbtype(scheme: Optional[Dict[str, Any]], *, default: int = -1) -> int:
     """读取 scheme 的 ``dbtype``；缺失或非法时返回 ``default``。"""
     if not scheme:

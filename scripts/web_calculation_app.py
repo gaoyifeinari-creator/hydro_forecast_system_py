@@ -68,9 +68,13 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from hydro_engine.io.calculation_app_data_loader import DEFAULT_FLOOD_JDBC_CONFIG
 from hydro_engine.io.scheme_config_utils import (
-    read_schemes_list,
-    select_scheme_dict_exact,
-    select_scheme_dict_smallest_step,
+    resolve_best_scheme_for_time_type,
+    resolve_scheme_for_time_scale,
+    scheme_dbtype,
+)
+from hydro_engine.io.forecast_mode_policy import (
+    is_realtime_forecast_mode,
+    normalize_forecast_mode,
 )
 
 from calculation_pipeline_runner import (
@@ -325,8 +329,11 @@ def _plot_node_tab(
         oin = [None] * len(display_times)
     if len(oout) != len(display_times):
         oout = [None] * len(display_times)
-    mode = str(aux.get("forecast_mode", "realtime_forecast")).strip().lower()
-    if mode == "realtime_forecast":
+    try:
+        mode = normalize_forecast_mode(aux.get("forecast_mode", "realtime_forecast"))
+    except Exception:
+        mode = "realtime_forecast"
+    if is_realtime_forecast_mode(mode):
         oin = _mask_observed_after_forecast_start_realtime_only(oin, rel_fs) or [None] * len(
             display_times
         )
@@ -653,8 +660,7 @@ def _load_best_scheme_for_time_type(config_path: str, time_type: str) -> Optiona
     cfg = str(config_path or "").strip()
     if not cfg or not Path(cfg).is_file():
         return None
-    schemes = read_schemes_list(cfg)
-    return select_scheme_dict_smallest_step(schemes, time_type=str(time_type or ""))
+    return resolve_best_scheme_for_time_type(cfg, time_type=str(time_type or ""))
 
 
 def _load_scheme_for_time_scale(config_path: str, time_type: str, step_size: int) -> Optional[Dict[str, Any]]:
@@ -668,8 +674,7 @@ def _load_scheme_for_time_scale(config_path: str, time_type: str, step_size: int
         sz = int(step_size)
     except Exception:
         return None
-    schemes = read_schemes_list(cfg)
-    return select_scheme_dict_exact(schemes, time_type=str(time_type or ""), step_size=sz)
+    return resolve_scheme_for_time_scale(cfg, time_type=str(time_type or ""), step_size=sz)
 
 
 def _scheme_time_axis_defaults(config_path: str, time_type: str) -> Dict[str, Any]:
@@ -712,10 +717,7 @@ def _scheme_dbtype_mode_label(config_path: str, time_type: str, step_size: int) 
     scheme = _load_scheme_for_time_scale(config_path, time_type, step_size)
     if not scheme:
         return "未匹配到当前 time_type+步长 方案（默认前时标）"
-    try:
-        dbtype = int(scheme.get("dbtype", -1))
-    except Exception:
-        dbtype = -1
+    dbtype = scheme_dbtype(scheme, default=-1)
     if dbtype == -1:
         return f"前时标（dbtype={dbtype}）"
     return f"后时标（dbtype={dbtype}）"

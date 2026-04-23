@@ -45,6 +45,12 @@ from hydro_engine.forecast.scenario_forcing import (
     ScenarioName,
     patch_catchment_scenario_precipitation,
 )
+from hydro_engine.io.forecast_mode_policy import (
+    allow_node_observed_routing_after_forecast,
+    allow_scenario_rainfall_injection,
+    is_realtime_forecast_mode,
+    normalize_forecast_mode,
+)
 
 
 def _normalize_catchment_forcing_bindings(data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -778,13 +784,9 @@ def run_calculation_from_json(
     # - realtime_forecast: 预报时段后不使用实测气象；节点接力按 forecast 边界切换到计算值
     # - historical_simulation: 预报时段后继续使用实测气象；若节点配置 use_observed_for_routing=true，
     #   则允许预报时段后继续用实测断面接力
-    resolved_mode = str(forecast_mode or "realtime_forecast").strip().lower()
-    if resolved_mode not in {"realtime_forecast", "historical_simulation"}:
-        raise ValueError(
-            "forecast_mode must be one of: realtime_forecast, historical_simulation"
-        )
+    resolved_mode = normalize_forecast_mode(forecast_mode)
 
-    if resolved_mode == "realtime_forecast":
+    if is_realtime_forecast_mode(resolved_mode):
         apply_realtime_forecast_observed_meteorology_cutoff(
             station_packages, time_context=time_context
         )
@@ -794,8 +796,7 @@ def run_calculation_from_json(
             node,
             "use_observed_for_routing_after_forecast",
             bool(getattr(node, "use_observed_for_routing", False))
-            and resolved_mode == "historical_simulation"
-            and isinstance(node, ReservoirNode),
+            and allow_node_observed_routing_after_forecast(resolved_mode, node),
         )
 
     # 按模式后的输入合成流域强迫。
@@ -819,7 +820,7 @@ def run_calculation_from_json(
 
     scenario_map = catchment_scenario_rainfall or {}
     # 历史模拟：全时段子流域面雨来自测站聚合实况，不注入数值预报/情景面雨（与管线一致）。
-    if resolved_mode == "historical_simulation":
+    if not allow_scenario_rainfall_injection(resolved_mode):
         scenario_map = {}
     primary_scen = str(scenario_precipitation or "expected").strip().lower()
     if primary_scen not in {"expected", "upper", "lower"}:

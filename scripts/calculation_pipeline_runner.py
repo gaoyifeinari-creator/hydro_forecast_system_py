@@ -65,10 +65,20 @@ from hydro_engine.io.json_config import (
 )
 from hydro_engine.io.scheme_config_utils import (
     catchment_catalog_names_from_scheme,
-    read_schemes_list,
-    select_scheme_dict_exact,
+    resolve_scheme_for_time_scale,
     scheme_dbtype,
     station_catalog_names_from_scheme,
+)
+from hydro_engine.io.forecast_mode_policy import (
+    allow_scenario_rainfall_injection,
+    is_realtime_forecast_mode,
+    normalize_forecast_mode,
+)
+from hydro_engine.io.time_anchor_policy import (
+    resolve_actual_forecast_start as _resolve_actual_forecast_start_policy,
+    resolve_forecast_rain_read_anchor_window as _resolve_forecast_rain_read_anchor_window_policy,
+    resolve_station_read_window_for_dbtype as _resolve_station_read_window_for_dbtype_policy,
+    shift_station_df_time_label_for_dbtype as _shift_station_df_time_label_for_dbtype_policy,
 )
 from hydro_engine.domain.nodes.reservoir import ReservoirNode
 
@@ -93,15 +103,21 @@ def _read_station_catalog_names(config_path: str, time_type: str, step_size: int
     从与当前 time_type / step_size 匹配的方案中读取 stations 目录，得到测站 id -> 配置名称。
     无名称或未配置 stations 时不在字典中出现（由 UI 仅展示 id）。
     """
-    schemes = read_schemes_list(config_path)
-    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    target = resolve_scheme_for_time_scale(
+        config_path,
+        time_type=time_type,
+        step_size=step_size,
+    )
     return station_catalog_names_from_scheme(target)
 
 
 def _read_catchment_catalog_names(config_path: str, time_type: str, step_size: int) -> Dict[str, str]:
     """从当前方案 catchments[] 读取子流域 id -> name（用于 Web 展示）。"""
-    schemes = read_schemes_list(config_path)
-    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    target = resolve_scheme_for_time_scale(
+        config_path,
+        time_type=time_type,
+        step_size=step_size,
+    )
     return catchment_catalog_names_from_scheme(target)
 
 
@@ -113,9 +129,29 @@ def _read_scheme_dbtype(config_path: str, time_type: str, step_size: int) -> int
 
     兼容：若配置缺失/异常，回退为 -1。
     """
-    schemes = read_schemes_list(config_path)
-    target = select_scheme_dict_exact(schemes, time_type=time_type, step_size=step_size)
+    target = resolve_scheme_for_time_scale(
+        config_path,
+        time_type=time_type,
+        step_size=step_size,
+    )
     return scheme_dbtype(target, default=-1)
+
+
+def _read_scheme_display_metadata(
+    config_path: str,
+    time_type: str,
+    step_size: int,
+) -> Tuple[Dict[str, str], Dict[str, str], int]:
+    target = resolve_scheme_for_time_scale(
+        config_path,
+        time_type=time_type,
+        step_size=step_size,
+    )
+    return (
+        station_catalog_names_from_scheme(target),
+        catchment_catalog_names_from_scheme(target),
+        scheme_dbtype(target, default=-1),
+    )
 
 
 def _log(msg: str, on_log: OnLog) -> None:
@@ -169,9 +205,10 @@ def _load_forecast_rain_from_scheme_db(
     从 scheme.future_rainfall 读取配置，查库整编并生成 catchment 级预报雨量情景。
     """
     try:
-        schemes = read_schemes_list(config_path)
-        target = select_scheme_dict_exact(
-            schemes, time_type=str(time_type), step_size=int(step_size)
+        target = resolve_scheme_for_time_scale(
+            config_path,
+            time_type=str(time_type),
+            step_size=int(step_size),
         )
         if not isinstance(target, dict):
             return {}
@@ -333,9 +370,11 @@ def _resolve_actual_forecast_start(
     - 输入时间即“界面显示的起报时间（预报第一个时刻标签）”。
     - 前后时标的数据库读数锚点在预报降雨读库阶段单独处理，不在此处平移。
     """
-    _ = time_delta
-    _ = dbtype
-    return forecast_start_time_input
+    return _resolve_actual_forecast_start_policy(
+        forecast_start_time_input,
+        time_delta=time_delta,
+        dbtype=dbtype,
+    )
 
 
 def _resolve_forecast_rain_read_anchor_window(
@@ -353,9 +392,12 @@ def _resolve_forecast_rain_read_anchor_window(
     - 后时标（dbtype!= -1）：读库锚点整体回拨 1 步，
       即展示首时刻 T0 对应的库锚点为 T0-time_delta。
     """
-    if int(dbtype) == -1:
-        return forecast_start_time, end_time
-    return forecast_start_time - time_delta, end_time - time_delta
+    return _resolve_forecast_rain_read_anchor_window_policy(
+        forecast_start_time=forecast_start_time,
+        end_time=end_time,
+        time_delta=time_delta,
+        dbtype=dbtype,
+    )
 
 
 def _shift_station_df_time_label_for_dbtype(
@@ -373,17 +415,11 @@ def _shift_station_df_time_label_for_dbtype(
     说明：预报降雨 WEA_GFSFORRAIN 的前时标处理在预报面雨整编链路中单独执行，
     不与本函数混用。
     """
-    if df is None or df.empty:
-        return df
-    if int(dbtype) != -1:
-        return df
-    out = df.copy()
-    for col in ("TIME_DT", "TIME"):
-        if col not in out.columns:
-            continue
-        ts = pd.to_datetime(out[col], errors="coerce")
-        out[col] = ts - time_delta
-    return out
+    return _shift_station_df_time_label_for_dbtype_policy(
+        df,
+        time_delta=time_delta,
+        dbtype=dbtype,
+    )
 
 
 def _resolve_station_read_window_for_dbtype(
@@ -405,17 +441,13 @@ def _resolve_station_read_window_for_dbtype(
     说明：预报降雨 WEA_GFSFORRAIN 的读库锚点平移在
     `_resolve_forecast_rain_read_anchor_window` 单独处理。
     """
-    if int(dbtype) != -1:
-        return read_time_start, read_time_end, station_obs_end
-    shifted_start = read_time_start + time_delta
-    shifted_end = read_time_end + time_delta
-    shifted_obs_end = station_obs_end + time_delta if station_obs_end is not None else None
-    # 日方案下，部分 daydb 记录时间可能位于当日白天（如 08:00）。
-    # 若仅平移 1 天，实时 t_end 可能卡在 00:00，导致“最后一个历史日”漏读；
-    # 这里额外放宽 1 天，随后仍由 clip(<forecast_start) 剪掉预报段，确保展示正确。
-    if shifted_obs_end is not None and time_delta >= timedelta(days=1):
-        shifted_obs_end = shifted_obs_end + time_delta
-    return shifted_start, shifted_end, shifted_obs_end
+    return _resolve_station_read_window_for_dbtype_policy(
+        read_time_start=read_time_start,
+        read_time_end=read_time_end,
+        station_obs_end=station_obs_end,
+        time_delta=time_delta,
+        dbtype=dbtype,
+    )
 
 
 def _infer_debug_table_columns(rows: List[Dict[str, Any]], *, max_cols: int = 40) -> List[str]:
@@ -682,6 +714,7 @@ def run_calculation_pipeline(
     - compute_forecast=True：在已组装好的输入基础上执行 CalculationEngine.run
     """
     _log("[ui] pipeline start", on_log)
+    resolved_mode = normalize_forecast_mode(forecast_mode)
 
     # UI 输入字段语义：`预报起报时间`
     # 这里把它当作 forecast_start_time（预报起点），再往回推 warmup_start_time，
@@ -774,7 +807,7 @@ def run_calculation_pipeline(
     read_time_start = time_context.warmup_start_time
     read_time_end = time_context.end_time
     station_obs_end = None
-    if str(forecast_mode).strip().lower() == "realtime_forecast":
+    if is_realtime_forecast_mode(resolved_mode):
         station_obs_end = station_observation_query_end_realtime(time_context)
     read_time_start, read_time_end, station_obs_end = _resolve_station_read_window_for_dbtype(
         read_time_start=read_time_start,
@@ -915,7 +948,7 @@ def run_calculation_pipeline(
     warns.extend(obs_warns or [])
 
     # 实时预报：T0 起无实测气象；与引擎 run_calculation_from_json 一致，先清强迫再组 aux
-    if str(forecast_mode).strip().lower() == "realtime_forecast":
+    if is_realtime_forecast_mode(resolved_mode):
         apply_realtime_forecast_observed_meteorology_cutoff(
             station_packages, time_context=time_context
         )
@@ -930,9 +963,7 @@ def run_calculation_pipeline(
 
     fs_idx = _compute_forecast_start_idx(time_context)
     forecast_rain_ftime_info: Dict[str, Any] = {}
-    is_historical_simulation = str(forecast_mode).strip().lower() == "historical_simulation"
-
-    if is_historical_simulation:
+    if not allow_scenario_rainfall_injection(resolved_mode):
         scenario_rain_map: Dict[str, CatchmentForecastRainfall] = {}
         _log(
             "[forecast_scenario_rain] historical_simulation: skip CSV/DB numerical forecast areal rain; "
@@ -1050,17 +1081,16 @@ def run_calculation_pipeline(
     except Exception:
         pass
 
-    station_catalog_names = _read_station_catalog_names(
-        config_used_path, time_type=str(time_type), step_size=int(step_size)
-    )
-    catchment_catalog_names = _read_catchment_catalog_names(
-        config_used_path, time_type=str(time_type), step_size=int(step_size)
+    station_catalog_names, catchment_catalog_names, _ = _read_scheme_display_metadata(
+        config_used_path,
+        time_type=str(time_type),
+        step_size=int(step_size),
     )
 
     aux_base: Dict[str, Any] = {
         "time_type": str(time_context.time_type.value),
         "dbtype": int(dbtype),
-        "forecast_mode": str(forecast_mode).strip().lower(),
+        "forecast_mode": resolved_mode,
         "forecast_start_idx": fs_idx,
         "node_observed_inflows": node_observed_inflows,
         "node_observed_outflows": node_observed_outflows,
@@ -1131,7 +1161,7 @@ def run_calculation_pipeline(
             step_size=int(step_size),
             warmup_start_time=time_context.warmup_start_time,
             observed_flows=observed_flows,
-            forecast_mode=forecast_mode,
+            forecast_mode=resolved_mode,
             catchment_workers=catchment_workers,
             catchment_scenario_rainfall=scenario_rain_map or None,
             scenario_precipitation=str(forecast_scenario_precipitation or "expected"),
@@ -1140,6 +1170,73 @@ def run_calculation_pipeline(
     aux = dict(aux_base)
     aux["_runtime_cache"] = runtime_cache
     return out, times, warns, aux
+
+
+def _resolve_binding_specs_for_runtime_cache(
+    *,
+    runtime_cache: Dict[str, Any],
+    config_used_path: str,
+    time_type: str,
+    step_size: int,
+    warmup_start_time: datetime,
+) -> Optional[List[Dict[str, Any]]]:
+    bs = runtime_cache.get("binding_specs")
+    if bs is not None:
+        return bs
+    try:
+        _, bs, _ = load_scheme_from_json(
+            file_path=config_used_path,
+            time_type=str(time_type),
+            step_size=int(step_size),
+            warmup_start_time=warmup_start_time,
+        )
+    except Exception:
+        return None
+    return bs
+
+
+def _refresh_runtime_aux_from_station_packages(
+    *,
+    runtime_cache: Dict[str, Any],
+    aux: Dict[str, Any],
+    station_packages: Dict[str, Any],
+    binding_specs: List[Dict[str, Any]],
+    times: pd.DatetimeIndex,
+    apply_scenario_overlay: bool,
+    scenario_rain_map: Dict[str, CatchmentForecastRainfall],
+    forecast_start_idx: int,
+    precipitation_field: str,
+) -> None:
+    sp, spt, st = _build_station_series_maps(station_packages=station_packages)
+    cr, _ = build_catchment_precip_series_from_station_packages(
+        binding_specs, station_packages, len(times)
+    )
+    if apply_scenario_overlay:
+        cr = _overlay_forecast_rain_to_catchment_series(
+            base_series=cr,
+            scenario_rain_map=scenario_rain_map or {},
+            times=times,
+            forecast_start_idx=forecast_start_idx,
+            precipitation_field=precipitation_field,
+        )
+
+    aux["station_precip"] = sp
+    aux["station_pet"] = spt
+    aux["station_temp"] = st
+    aux["catchment_rain"] = cr
+    try:
+        ab = dict(runtime_cache.get("aux_base") or {})
+        ab.update(
+            {
+                "station_precip": sp,
+                "station_pet": spt,
+                "station_temp": st,
+                "catchment_rain": cr,
+            }
+        )
+        runtime_cache["aux_base"] = ab
+    except Exception:
+        pass
 
 
 def run_forecast_from_runtime_cache(
@@ -1159,6 +1256,7 @@ def run_forecast_from_runtime_cache(
     """
     if not runtime_cache:
         raise ValueError("runtime_cache is empty")
+    resolved_mode = normalize_forecast_mode(forecast_mode)
 
     _log("[ui] forecast from cache", on_log)
 
@@ -1185,7 +1283,7 @@ def run_forecast_from_runtime_cache(
         else bool(runtime_cache.get("forecast_run_multiscenario"))
     )
     fs_idx = _compute_forecast_start_idx(time_context)
-    if str(forecast_mode).strip().lower() == "historical_simulation":
+    if not allow_scenario_rainfall_injection(resolved_mode):
         scen_map = {}
         _log(
             "[forecast_scenario_rain] historical_simulation: ignore cached/aligned scenario rain "
@@ -1208,7 +1306,7 @@ def run_forecast_from_runtime_cache(
         step_size=int(step_size),
         warmup_start_time=warmup_start_time,
         observed_flows=observed_flows,
-        forecast_mode=forecast_mode,
+        forecast_mode=resolved_mode,
         catchment_workers=catchment_workers,
         catchment_scenario_rainfall=scen_map or None,
         scenario_precipitation=scen_precip,
@@ -1217,7 +1315,7 @@ def run_forecast_from_runtime_cache(
 
     aux = dict(aux_base)
     aux["_runtime_cache"] = runtime_cache
-    aux["forecast_mode"] = str(forecast_mode).strip().lower()
+    aux["forecast_mode"] = resolved_mode
 
     # 保险：forecast_start_idx / time_type 以当前 time_context 为准
     try:
@@ -1226,84 +1324,26 @@ def run_forecast_from_runtime_cache(
     except Exception:
         pass
 
-    # 实时预报：run_calculation_from_json 会原地修补 station_packages；aux_base 在首次读数时已生成，
-    # 这里用修补后的包重建雨量相关 aux，与引擎输入一致。
-    if str(forecast_mode).strip().lower() == "realtime_forecast":
-        bs = runtime_cache.get("binding_specs")
-        if bs is None:
-            try:
-                _, bs, _ = load_scheme_from_json(
-                    file_path=config_used_path,
-                    time_type=str(time_type),
-                    step_size=int(step_size),
-                    warmup_start_time=warmup_start_time,
-                )
-            except Exception:
-                bs = None
-        if bs is not None:
-            sp, spt, st = _build_station_series_maps(station_packages=station_packages)
-            cr, _ = build_catchment_precip_series_from_station_packages(
-                bs, station_packages, len(times)
-            )
-            cr = _overlay_forecast_rain_to_catchment_series(
-                base_series=cr,
-                scenario_rain_map=scen_map or {},
-                times=times,
-                forecast_start_idx=fs_idx,
-                precipitation_field=scen_precip,
-            )
-            aux["station_precip"] = sp
-            aux["station_pet"] = spt
-            aux["station_temp"] = st
-            aux["catchment_rain"] = cr
-            try:
-                ab = dict(runtime_cache.get("aux_base") or {})
-                ab.update(
-                    {
-                        "station_precip": sp,
-                        "station_pet": spt,
-                        "station_temp": st,
-                        "catchment_rain": cr,
-                    }
-                )
-                runtime_cache["aux_base"] = ab
-            except Exception:
-                pass
-
-    elif str(forecast_mode).strip().lower() == "historical_simulation":
-        bs = runtime_cache.get("binding_specs")
-        if bs is None:
-            try:
-                _, bs, _ = load_scheme_from_json(
-                    file_path=config_used_path,
-                    time_type=str(time_type),
-                    step_size=int(step_size),
-                    warmup_start_time=warmup_start_time,
-                )
-            except Exception:
-                bs = None
-        if bs is not None:
-            sp, spt, st = _build_station_series_maps(station_packages=station_packages)
-            cr, _ = build_catchment_precip_series_from_station_packages(
-                bs, station_packages, len(times)
-            )
-            aux["station_precip"] = sp
-            aux["station_pet"] = spt
-            aux["station_temp"] = st
-            aux["catchment_rain"] = cr
-            try:
-                ab = dict(runtime_cache.get("aux_base") or {})
-                ab.update(
-                    {
-                        "station_precip": sp,
-                        "station_pet": spt,
-                        "station_temp": st,
-                        "catchment_rain": cr,
-                    }
-                )
-                runtime_cache["aux_base"] = ab
-            except Exception:
-                pass
+    # run_calculation_from_json 可能原地修补 station_packages（实时模式），因此计算后统一重建 aux 雨量相关字段。
+    bs = _resolve_binding_specs_for_runtime_cache(
+        runtime_cache=runtime_cache,
+        config_used_path=config_used_path,
+        time_type=str(time_type),
+        step_size=int(step_size),
+        warmup_start_time=warmup_start_time,
+    )
+    if bs is not None:
+        _refresh_runtime_aux_from_station_packages(
+            runtime_cache=runtime_cache,
+            aux=aux,
+            station_packages=station_packages,
+            binding_specs=bs,
+            times=times,
+            apply_scenario_overlay=is_realtime_forecast_mode(resolved_mode),
+            scenario_rain_map=scen_map or {},
+            forecast_start_idx=fs_idx,
+            precipitation_field=scen_precip,
+        )
 
     return out, times, warns, aux
 

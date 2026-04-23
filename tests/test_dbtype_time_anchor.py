@@ -3,7 +3,6 @@ from __future__ import annotations
 from tests import _sys_path  # noqa: F401
 
 import json
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -11,17 +10,15 @@ from pathlib import Path
 
 import pandas as pd
 
-_ROOT = Path(__file__).resolve().parent.parent
-_SCRIPTS = _ROOT / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-from calculation_pipeline_runner import (
-    _read_scheme_dbtype,
-    _resolve_actual_forecast_start,
-    _resolve_forecast_rain_read_anchor_window,
-    _resolve_station_read_window_for_dbtype,
-    _shift_station_df_time_label_for_dbtype,
+from hydro_engine.io.scheme_config_utils import (
+    resolve_scheme_for_time_scale,
+    scheme_dbtype,
+)
+from hydro_engine.io.time_anchor_policy import (
+    resolve_actual_forecast_start,
+    resolve_forecast_rain_read_anchor_window,
+    resolve_station_read_window_for_dbtype,
+    shift_station_df_time_label_for_dbtype,
 )
 
 
@@ -30,11 +27,11 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         t0 = datetime(2026, 4, 20, 8, 0, 0)
         step = timedelta(hours=1)
         self.assertEqual(
-            _resolve_actual_forecast_start(t0, time_delta=step, dbtype=-1),
+            resolve_actual_forecast_start(t0, time_delta=step, dbtype=-1),
             t0,
         )
         self.assertEqual(
-            _resolve_actual_forecast_start(t0, time_delta=step, dbtype=0),
+            resolve_actual_forecast_start(t0, time_delta=step, dbtype=0),
             t0,
         )
 
@@ -43,7 +40,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         display_end = datetime(2025, 11, 8, 15, 0, 0)
         day_step = timedelta(days=1)
         # 前时标：锚点不变
-        b0, e0 = _resolve_forecast_rain_read_anchor_window(
+        b0, e0 = resolve_forecast_rain_read_anchor_window(
             forecast_start_time=display_begin,
             end_time=display_end,
             time_delta=day_step,
@@ -51,7 +48,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         )
         self.assertEqual((b0, e0), (display_begin, display_end))
         # 后时标：锚点整体回拨 1 步
-        b1, e1 = _resolve_forecast_rain_read_anchor_window(
+        b1, e1 = resolve_forecast_rain_read_anchor_window(
             forecast_start_time=display_begin,
             end_time=display_end,
             time_delta=day_step,
@@ -66,7 +63,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         obs_end = datetime(2025, 11, 1, 14, 0, 0)
         step = timedelta(hours=1)
 
-        s0, e0, o0 = _resolve_station_read_window_for_dbtype(
+        s0, e0, o0 = resolve_station_read_window_for_dbtype(
             read_time_start=start,
             read_time_end=end,
             station_obs_end=obs_end,
@@ -75,7 +72,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         )
         self.assertEqual((s0, e0, o0), (start + step, end + step, obs_end + step))
 
-        s1, e1, o1 = _resolve_station_read_window_for_dbtype(
+        s1, e1, o1 = resolve_station_read_window_for_dbtype(
             read_time_start=start,
             read_time_end=end,
             station_obs_end=obs_end,
@@ -90,7 +87,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
         # realtime 基准上界通常是 forecast_start - 1day
         obs_end = datetime(2025, 10, 31, 0, 0, 0)
         day_step = timedelta(days=1)
-        s0, e0, o0 = _resolve_station_read_window_for_dbtype(
+        s0, e0, o0 = resolve_station_read_window_for_dbtype(
             read_time_start=start,
             read_time_end=end,
             station_obs_end=obs_end,
@@ -111,7 +108,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
             }
         )
         step = timedelta(hours=1)
-        shifted_front = _shift_station_df_time_label_for_dbtype(
+        shifted_front = shift_station_df_time_label_for_dbtype(
             df,
             time_delta=step,
             dbtype=-1,
@@ -120,7 +117,7 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
             [t.to_pydatetime() for t in pd.to_datetime(shifted_front["TIME_DT"]).tolist()],
             [datetime(2025, 11, 1, 4, 0, 0), datetime(2025, 11, 1, 5, 0, 0)],
         )
-        shifted_back = _shift_station_df_time_label_for_dbtype(
+        shifted_back = shift_station_df_time_label_for_dbtype(
             df,
             time_delta=step,
             dbtype=0,
@@ -146,10 +143,19 @@ class TestDbtypeTimeAnchor(unittest.TestCase):
             json.dump(cfg, f, ensure_ascii=False)
             path = f.name
         try:
-            self.assertEqual(_read_scheme_dbtype(path, "Hour", 1), 0)
-            self.assertEqual(_read_scheme_dbtype(path, "Day", 1), -1)
+            self.assertEqual(
+                scheme_dbtype(resolve_scheme_for_time_scale(path, time_type="Hour", step_size=1), default=-1),
+                0,
+            )
+            self.assertEqual(
+                scheme_dbtype(resolve_scheme_for_time_scale(path, time_type="Day", step_size=1), default=-1),
+                -1,
+            )
             # 未配置时默认前时标
-            self.assertEqual(_read_scheme_dbtype(path, "Minute", 1), -1)
+            self.assertEqual(
+                scheme_dbtype(resolve_scheme_for_time_scale(path, time_type="Minute", step_size=1), default=-1),
+                -1,
+            )
         finally:
             Path(path).unlink(missing_ok=True)
 

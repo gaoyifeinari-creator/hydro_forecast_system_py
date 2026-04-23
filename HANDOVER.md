@@ -39,7 +39,7 @@
 | **`models/runoff/`** | `DummyRunoffModel`、`XinanjiangRunoffModel`（对齐 `HFXAJAlg.java` + 单位线）、`XinanjiangCSRunoffModel`（对齐 `HFXAJCSAlg.java` 滞时河网汇流）、`TankRunoffModel`、`SnowmeltRunoffModel`；**`calibration_bounds.py`** 提供新安江/XAJCS 与 Java `m_douParaDBArr/UBArr/IsCaliArr` 一致的率定上下界及 `clip_*`、向量打包辅助函数。 |
 | **`models/correction/`** | 如 `AR1ErrorUpdater`。 |
 | **`models/routing/`** | `DummyRoutingModel`、`MuskingumRoutingModel`（对齐 Java `HFMSKAlg`：NE=2；Dt/x1/x2约束违规时 warning 后继续）。 |
-| **`io/json_config.py`** | 方案解析、`run_calculation_from_json`（含情景面雨关键字参数）、`apply_realtime_forecast_observed_meteorology_cutoff`（实时预报 T0 起气象截断）；详见 §4、§10.6、§10.7。 |
+| **`io/json_config.py`** | 方案解析、`run_calculation_from_json`（含情景面雨关键字参数）、`apply_realtime_forecast_observed_meteorology_cutoff`（实时预报 T0 起气象截断）；`forecast_mode` 分支策略统一由 `io/forecast_mode_policy.py` 提供。详见 §4、§10.6、§10.7、§10.15。 |
 | **`forecast/`** | 预报面雨三情景、`scenario_forcing` 预报段覆写、`ForecastDataManager`；与 `run_calculation_from_json`、pipeline/Web 串联。详见 `DEVELOPMENT_MANUAL.md` §3.6、§5.3、§10.6b。 |
 
 ---
@@ -472,6 +472,27 @@ python -m unittest discover -v
 
 ---
 
+### 10.15 策略入口与公共锚点收口（2026-04-23）
+
+为提升后续维护效率，本次新增并落地两类公共策略模块：
+
+- `hydro_engine/io/forecast_mode_policy.py`
+  - 统一 `forecast_mode` 的归一化与合法性校验；
+  - 统一“是否允许情景面雨注入”；
+  - 统一“是否允许节点预报段接力（当前历史模拟仅 ReservoirNode 允许）”。
+- `hydro_engine/io/time_anchor_policy.py`
+  - 统一 `dbtype` 相关时间锚点规则（预报起点解析、预报雨读库窗口、测站读窗平移、测站标签回拨）。
+
+同步调整：
+
+- `run_calculation_from_json`、`run_calculation_pipeline`、`run_forecast_from_runtime_cache` 统一调用 `forecast_mode_policy`；
+- Web `dbtype` 读取改为复用 `scheme_config_utils`；
+- 缓存路径 `aux` 重建分支合并为公共方法（仅参数化“是否叠加情景面雨”）；
+- `tests/test_dbtype_time_anchor.py` 改为依赖稳定公共模块（不再依赖 runner 私有 helper）；
+- 新增 `tests/test_forecast_mode_policy.py`。
+
+---
+
 ## 11. 版本与变更记录（摘要）
 
 | 日期 | 摘要 |
@@ -487,6 +508,7 @@ python -m unittest discover -v
 | **2026-04-21**（更新 8） | **配置去冗余收口 + NumPy 升级落地**：`stations.rain_gauges[*].unit` 移除（固定 mm）；`stations.reservoir` 移除（以 `nodes[].station_binding` 为单一来源）；`nodes[].incoming_reach_ids/outgoing_reach_ids` 停止维护并由 `reaches` 自动回填；预报雨 DB 参数统一从 `floodForecastJdbc.json.forecast_rain` 读取，`future_rainfall.db` 删除；预报源选择仅认 `selected_source_name`；`TimeSeries.values` 升级为 `np.ndarray`，`MuskingumRoutingModel` 支持集合维向量化。 |
 | **2026-04-22**（更新 9） | **预报面雨对账修复**：新增“多步长->1小时->自然日”编译模块；后时标小时映射修正为 `+1h`；日尺度改为“值不平移、仅标签 +1 天”；`Day` 模式 `latest_ftime_end` 对齐 HPS（同日+当前小时）；统一 `MAX(FTIME)` 批次策略；新增 `154034` 对账日志与回归测试。详见本文 §10.12。 |
 | **2026-04-23**（更新 10） | **历史模拟节点接力口径调整**：`historical_simulation` 下仅 `ReservoirNode` 在预报段继续实测接力，`CrossSectionNode` 预报段改为计算出流；并新增回归测试 `test_historical_mode_only_reservoir_keeps_observed_after_forecast`。详见本文 §10.14。 |
+| **2026-04-23**（更新 11） | **策略入口收口与公共方法抽取**：新增 `forecast_mode_policy.py`、`time_anchor_policy.py`；三处主入口统一调用模式策略；缓存路径 `aux` 重建分支合并；Web 复用 `scheme_config_utils`；`test_dbtype_time_anchor` 改为依赖公共 helper，并新增 `test_forecast_mode_policy.py`。详见本文 §10.15。 |
 
 ---
 
