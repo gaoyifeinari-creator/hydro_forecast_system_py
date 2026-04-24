@@ -37,6 +37,20 @@ class AbstractNode(ABC):
     use_observed_inflow_for_simulation: bool = False
     correction_config: Optional[NodeCorrectionConfig] = None
 
+    def _build_observed_outflow_map(self, observed_series: TimeSeries) -> Dict[str, TimeSeries]:
+        """
+        将节点总出流实测序列映射到各下游河段。
+
+        - 单出口节点：该实测序列就是该河段出流
+        - 多出口节点：沿用节点自身的分流/调度规则，把“总出流”拆分到各河段，
+          避免将同一条实测序列整段复制到多条支路上造成水量重复
+        """
+        if not self.outgoing_reach_ids:
+            return {}
+        if len(self.outgoing_reach_ids) == 1:
+            return {self.outgoing_reach_ids[0]: observed_series}
+        return self._compute_simulated_outflows(observed_series)
+
     def process_water(
         self,
         total_inflow: TimeSeries,
@@ -81,15 +95,15 @@ class AbstractNode(ABC):
 
             # forecast 段为空：输出完全使用观测值（不需要任何调度计算）
             if override_start >= time_context.end_time:
-                # 历史段不做模拟；以节点配置的 outgoing_reach_ids 作为输出 key 集合兜底。
-                return {rid: obs for rid in self.outgoing_reach_ids}
+                # 历史段不做模拟；多出口节点仍需按自身分流规则拆分 observed 总出流。
+                return self._build_observed_outflow_map(obs)
 
             # 仅对 forecast 后段计算出流
             sim_in = effective_inflow.slice(override_start, time_context.end_time)
             sim_map = self._compute_simulated_outflows(sim_in)
 
             # 历史段输出直接取 observed；forecast 段用模拟结果覆盖
-            out: Dict[str, TimeSeries] = {rid: obs for rid in sim_map.keys()}
+            out: Dict[str, TimeSeries] = self._build_observed_outflow_map(obs)
             for rid, sim_ts in sim_map.items():
                 start_idx = obs.get_index_by_time(sim_ts.start_time)
                 new_values = np.array(out[rid].values, dtype=np.float64, copy=True).reshape(-1)
@@ -120,7 +134,10 @@ class AbstractNode(ABC):
                     if self.use_observed_for_routing_after_forecast
                     else (time_context.forecast_start_time - corrected.time_step)
                 )
-                out[rid] = corrected.blend(obs, boundary)
+                observed_outflow = self._build_observed_outflow_map(obs).get(rid)
+                if observed_outflow is None:
+                    raise ValueError(f"Observed outflow mapping missing reach id: {rid}")
+                out[rid] = corrected.blend(observed_outflow, boundary)
             else:
                 out[rid] = corrected
 

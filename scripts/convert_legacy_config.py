@@ -252,7 +252,7 @@ def _register_flow_station_catalog(
         return
     display = str(ds_name or "").strip() or s
     if s not in flow_station_seen:
-        flow_station_seen[s] = {"id": s, "name": display, "unit": "m3/s"}
+        flow_station_seen[s] = {"id": s, "name": display}
         return
     cur = str(flow_station_seen[s].get("name", "") or "").strip()
     if cur == s and display != s:
@@ -271,7 +271,7 @@ def _register_stage_station_catalog(
         return
     display = str(ds_name or "").strip() or s
     if s not in stage_station_seen:
-        stage_station_seen[s] = {"id": s, "name": display, "unit": "m"}
+        stage_station_seen[s] = {"id": s, "name": display}
         return
     cur = str(stage_station_seen[s].get("name", "") or "").strip()
     if cur == s and display != s:
@@ -445,8 +445,6 @@ def _scheme_payload_from_sections(
                         _pick(u, ["unitName", "unit_name", "name"], None),
                         unit_id,
                     ),
-                    # 正确规则：unit 的下游节点就是其所属 sec 本身
-                    "downstream_node_id": secid,
                     "routing_model": _wrap_routing_model(_pick(u, ["unitCModel", "unitcmodel"], {})),
                     "runoff_model": _wrap_runoff_model(_pick(u, ["unitgmodel", "unitGModel", "runoffModel"], {})),
                 }
@@ -703,4 +701,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

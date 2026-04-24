@@ -339,6 +339,10 @@ python -m unittest discover -v
    - 雨量站单位固定按 mm 处理，不再在 JSON 中重复写 `unit`。
    - 转换脚本 `scripts/convert_legacy_config.py` 同步：后续生成配置不再输出该字段。
 
+1a. **流量/水位站 `unit` 也不再在配置中维护**
+   - 流量默认按 `m3/s` 处理，水位默认按 `m` 处理。
+   - 因为这两类站点在当前项目中单位是固定口径，所以不再在 `flow_stations` / `stage_stations` / 水库站点目录中重复声明。
+
 2. **`stations.reservoir` 目录移除**
    - 该目录与 `nodes[].station_binding`（入库/出库/水位站）重复。
    - 当前约定：计算与展示所需水库站点信息以 `nodes[].station_binding` 为准。
@@ -493,6 +497,31 @@ python -m unittest discover -v
 
 ---
 
+### 10.16 配置单一真相继续收口（2026-04-24）
+
+本次没有改动引擎计算语义，只把此前已经在代码与文档中成立的“单一真相”继续落实到实际配置文件，减少配置层重复声明。
+
+1. **日常方案配置去掉 `catchments[].downstream_node_id`**
+   - 文件：`configs/forecastSchemeConf.json`
+   - 当前加载逻辑里，`nodes[].local_catchment_ids` 是 catchment 归属节点的单一真相。
+   - 当 `catchments[].downstream_node_id` 缺失时，loader 会自动回退到 owner node；
+   - 当该字段显式存在时，当前实现还要求它必须与 owner node 一致，否则直接报错。
+   - 因此在当前业务约定“catchment 归属节点 = catchment 路由注入节点”下，该字段属于重复信息，本次已从日常维护配置中移除。
+
+2. **示例配置去掉 `nodes[].incoming_reach_ids/outgoing_reach_ids`**
+   - 文件：`configs/example_forecast_config.json`
+   - 当前拓扑单一真相是 `reaches[].upstream_node_id/downstream_node_id`。
+   - 节点入边/出边在运行时由 `reaches` 自动回填，不再需要在 `nodes[]` 中重复维护。
+   - 本次同步精简示例配置，避免新接手同学误以为节点侧还要手工维护 reach 关联。
+
+3. **当前推荐维护口径**
+   - 拓扑关系以 `reaches[]` 为准；
+   - catchment 归属以 `nodes[].local_catchment_ids` 为准；
+   - 节点站点绑定以 `nodes[].station_binding` 为准；
+   - `catchments[]` 只维护子流域自身参数（如 `id/name/runoff_model/routing_model/...`），不再重复声明所属节点。
+
+---
+
 ## 11. 版本与变更记录（摘要）
 
 | 日期 | 摘要 |
@@ -509,6 +538,7 @@ python -m unittest discover -v
 | **2026-04-22**（更新 9） | **预报面雨对账修复**：新增“多步长->1小时->自然日”编译模块；后时标小时映射修正为 `+1h`；日尺度改为“值不平移、仅标签 +1 天”；`Day` 模式 `latest_ftime_end` 对齐 HPS（同日+当前小时）；统一 `MAX(FTIME)` 批次策略；新增 `154034` 对账日志与回归测试。详见本文 §10.12。 |
 | **2026-04-23**（更新 10） | **历史模拟节点接力口径调整**：`historical_simulation` 下仅 `ReservoirNode` 在预报段继续实测接力，`CrossSectionNode` 预报段改为计算出流；并新增回归测试 `test_historical_mode_only_reservoir_keeps_observed_after_forecast`。详见本文 §10.14。 |
 | **2026-04-23**（更新 11） | **策略入口收口与公共方法抽取**：新增 `forecast_mode_policy.py`、`time_anchor_policy.py`；三处主入口统一调用模式策略；缓存路径 `aux` 重建分支合并；Web 复用 `scheme_config_utils`；`test_dbtype_time_anchor` 改为依赖公共 helper，并新增 `test_forecast_mode_policy.py`。详见本文 §10.15。 |
+| **2026-04-24**（更新 12） | **配置单一真相继续落地**：`configs/forecastSchemeConf.json` 去掉 `catchments[].downstream_node_id`，完全依赖 `nodes[].local_catchment_ids` 推导 owner node；`configs/example_forecast_config.json` 去掉 `nodes[].incoming_reach_ids/outgoing_reach_ids`，示例配置与“`reaches` 为拓扑真相、节点入/出边运行时回填”的约定保持一致。详见本文 §10.16。 |
 
 ---
 

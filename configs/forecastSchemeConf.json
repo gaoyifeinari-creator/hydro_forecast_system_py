@@ -28,9 +28,7 @@
             ],
             "sub_sources": []
           }
-         
         ],
-        
         "distribution_params": []
       },
       "nodes": [
@@ -149,7 +147,6 @@
         {
           "id": "154197",
           "name": "立洲单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -193,7 +190,6 @@
         {
           "id": "154879",
           "name": "康坞单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -237,7 +233,6 @@
         {
           "id": "154849",
           "name": "纳瓦单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -281,7 +276,6 @@
         {
           "id": "1541951",
           "name": "俄公堡单元",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -325,7 +319,6 @@
         {
           "id": "1541952",
           "name": "俄公堡单元",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -369,7 +362,6 @@
         {
           "id": "154191",
           "name": "茶布朗单元",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -413,7 +405,6 @@
         {
           "id": "154034",
           "name": "卡基娃单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -457,7 +448,6 @@
         {
           "id": "154847",
           "name": "清水沟单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -501,7 +491,6 @@
         {
           "id": "154846",
           "name": "陈昌单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -545,7 +534,6 @@
         {
           "id": "1548551",
           "name": "上通坝单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -589,7 +577,6 @@
         {
           "id": "15485513",
           "name": "上通坝13单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -633,7 +620,6 @@
         {
           "id": "1548552",
           "name": "上通坝2单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -677,7 +663,6 @@
         {
           "id": "1548553",
           "name": "上通坝3单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -721,7 +706,6 @@
         {
           "id": "1548554",
           "name": "上通坝4单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -765,7 +749,6 @@
         {
           "id": "1548555",
           "name": "上通坝5单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -809,7 +792,6 @@
         {
           "id": "1548556",
           "name": "上通坝6单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -853,7 +835,6 @@
         {
           "id": "1548557",
           "name": "上通坝7单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -897,7 +878,6 @@
         {
           "id": "1548558",
           "name": "上通坝8单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -941,7 +921,6 @@
         {
           "id": "1548559",
           "name": "上通坝9单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -985,7 +964,6 @@
         {
           "id": "15485510",
           "name": "上通坝10单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -1029,7 +1007,6 @@
         {
           "id": "15485511",
           "name": "上通坝11单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -1227,30 +1204,25 @@
         "flow_stations": [
           {
             "id": "1541971005",
-            "name": "立洲",
-            "unit": "m3/s"
+            "name": "立洲"
           },
           {
             "id": "1541951005",
-            "name": "俄公堡",
-            "unit": "m3/s"
+            "name": "俄公堡"
           },
           {
             "id": "1540341000",
-            "name": "卡基娃",
-            "unit": "m3/s"
+            "name": "卡基娃"
           },
           {
             "id": "1548501000",
-            "name": "上通坝",
-            "unit": "m3/s"
+            "name": "上通坝"
           }
         ],
         "stage_stations": [
           {
             "id": "1541970001",
-            "name": "立洲",
-            "unit": "m"
+            "name": "立洲"
           }
         ]
       },
@@ -2187,9 +2159,7 @@
             ],
             "sub_sources": []
           }
-         
         ],
-        
         "distribution_params": []
       },
       "nodes": [
@@ -2311,7 +2281,6 @@
         {
           "id": "154197",
           "name": "立洲单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2355,7 +2324,6 @@
         {
           "id": "154879",
           "name": "康坞单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2399,7 +2367,6 @@
         {
           "id": "154849",
           "name": "纳瓦单元",
-          "downstream_node_id": "154197",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2443,7 +2410,6 @@
         {
           "id": "1541951",
           "name": "俄公堡单元1",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2487,7 +2453,6 @@
         {
           "id": "1541952",
           "name": "俄公堡单元2",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2531,7 +2496,6 @@
         {
           "id": "154191",
           "name": "茶布朗单元",
-          "downstream_node_id": "154195",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2575,7 +2539,6 @@
         {
           "id": "154034",
           "name": "卡基娃单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2619,7 +2582,6 @@
         {
           "id": "154847",
           "name": "清水沟单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2663,7 +2625,6 @@
         {
           "id": "154846",
           "name": "陈昌单元",
-          "downstream_node_id": "154034",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2707,7 +2668,6 @@
         {
           "id": "1548551",
           "name": "上通坝单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2751,7 +2711,6 @@
         {
           "id": "15485513",
           "name": "上通坝13单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2795,7 +2754,6 @@
         {
           "id": "1548552",
           "name": "上通坝2单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2839,7 +2797,6 @@
         {
           "id": "1548553",
           "name": "上通坝3单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2883,7 +2840,6 @@
         {
           "id": "1548554",
           "name": "上通坝4单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2927,7 +2883,6 @@
         {
           "id": "1548555",
           "name": "上通坝5单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -2971,7 +2926,6 @@
         {
           "id": "1548556",
           "name": "上通坝6单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3015,7 +2969,6 @@
         {
           "id": "1548557",
           "name": "上通坝7单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3059,7 +3012,6 @@
         {
           "id": "1548558",
           "name": "上通坝8单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3103,7 +3055,6 @@
         {
           "id": "1548559",
           "name": "上通坝9单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3147,7 +3098,6 @@
         {
           "id": "15485510",
           "name": "上通坝10单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3191,7 +3141,6 @@
         {
           "id": "15485511",
           "name": "上通坝11单元",
-          "downstream_node_id": "154850",
           "routing_model": {
             "name": "MuskingumRoutingModel",
             "params": {
@@ -3389,30 +3338,25 @@
         "flow_stations": [
           {
             "id": "1541971005",
-            "name": "立洲",
-            "unit": "m3/s"
+            "name": "立洲"
           },
           {
             "id": "1541951005",
-            "name": "俄公堡",
-            "unit": "m3/s"
+            "name": "俄公堡"
           },
           {
             "id": "1540341000",
-            "name": "卡基娃",
-            "unit": "m3/s"
+            "name": "卡基娃"
           },
           {
             "id": "1548501000",
-            "name": "上通坝",
-            "unit": "m3/s"
+            "name": "上通坝"
           }
         ],
         "stage_stations": [
           {
             "id": "1541970001",
-            "name": "立洲",
-            "unit": "m"
+            "name": "立洲"
           }
         ]
       },

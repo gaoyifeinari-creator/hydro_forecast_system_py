@@ -19,9 +19,9 @@
           "id": "N1",
           "name": "上游常规节点1",
           "type": "cross_section",
-          "incoming_reach_ids": [],
-          "outgoing_reach_ids": ["R1"],
-          "local_catchment_ids": ["CA"],
+          "local_catchment_ids": [
+            "CA"
+          ],
           "station_binding": {
             "flow_station_id": "ST_FLOW_N1",
             "stage_station_id": "ST_LEVEL_N1"
@@ -31,7 +31,9 @@
           "correction_config": {
             "updater_model": {
               "name": "AR1ErrorUpdater",
-              "params": { "decay_factor": 0.8 }
+              "params": {
+                "decay_factor": 0.8
+              }
             }
           }
         },
@@ -39,10 +41,9 @@
           "id": "N2",
           "name": "上游常规节点2",
           "type": "cross_section",
-          "incoming_reach_ids": [],
-          "outgoing_reach_ids": ["R2"],
-          "local_catchment_ids": ["CB"]
-          ,
+          "local_catchment_ids": [
+            "CB"
+          ],
           "station_binding": {
             "flow_station_id": "ST_FLOW_N2",
             "stage_station_id": "ST_LEVEL_N2"
@@ -52,8 +53,6 @@
           "id": "N3",
           "name": "水库节点3",
           "type": "reservoir",
-          "incoming_reach_ids": ["R1", "R2"],
-          "outgoing_reach_ids": ["R3"],
           "local_catchment_ids": [],
           "station_binding": {
             "inflow_station_id": "ST_IN_N3",
@@ -77,20 +76,44 @@
                 "name": "level_storage_curve",
                 "direction": "level_to_storage",
                 "points": [
-                  { "x": 235.0, "y": 1.2e8 },
-                  { "x": 245.0, "y": 2.5e8 },
-                  { "x": 255.0, "y": 4.2e8 },
-                  { "x": 262.0, "y": 5.8e8 }
+                  {
+                    "x": 235.0,
+                    "y": 120000000.0
+                  },
+                  {
+                    "x": 245.0,
+                    "y": 250000000.0
+                  },
+                  {
+                    "x": 255.0,
+                    "y": 420000000.0
+                  },
+                  {
+                    "x": 262.0,
+                    "y": 580000000.0
+                  }
                 ]
               },
               {
                 "name": "tailwater_discharge_curve",
                 "direction": "discharge_to_tailwater",
                 "points": [
-                  { "x": 50.0, "y": 180.2 },
-                  { "x": 200.0, "y": 181.1 },
-                  { "x": 400.0, "y": 182.0 },
-                  { "x": 600.0, "y": 182.8 }
+                  {
+                    "x": 50.0,
+                    "y": 180.2
+                  },
+                  {
+                    "x": 200.0,
+                    "y": 181.1
+                  },
+                  {
+                    "x": 400.0,
+                    "y": 182.0
+                  },
+                  {
+                    "x": 600.0,
+                    "y": 182.8
+                  }
                 ]
               }
             ]
@@ -100,8 +123,6 @@
           "id": "N4",
           "name": "分流节点4",
           "type": "diversion",
-          "incoming_reach_ids": ["R3"],
-          "outgoing_reach_ids": ["R4", "R5"],
           "local_catchment_ids": [],
           "station_binding": {
             "flow_station_id": "ST_FLOW_N4",
@@ -117,8 +138,6 @@
           "id": "N5",
           "name": "总出口节点5",
           "type": "cross_section",
-          "incoming_reach_ids": ["R4"],
-          "outgoing_reach_ids": [],
           "local_catchment_ids": [],
           "station_binding": {
             "flow_station_id": "ST_FLOW_N5",
@@ -129,8 +148,6 @@
           "id": "N6",
           "name": "蓄滞洪区节点6",
           "type": "cross_section",
-          "incoming_reach_ids": ["R5"],
-          "outgoing_reach_ids": [],
           "local_catchment_ids": [],
           "station_binding": {
             "flow_station_id": "ST_FLOW_N6",
@@ -287,18 +304,49 @@
         ],
         "air_temperature_stations": [],
         "flow_stations": [
-          { "id": "ST_FLOW_N1", "name": "N1断面流量实测站", "unit": "m3/s", "notes": "普通断面：节点输出实测/演进用 flow_station_id" },
-          { "id": "ST_FLOW_N2", "name": "N2断面流量实测站", "unit": "m3/s" },
-          { "id": "ST_FLOW_N4", "name": "N4断面流量实测站", "unit": "m3/s" },
-          { "id": "ST_FLOW_N5", "name": "N5断面流量实测站", "unit": "m3/s" },
-          { "id": "ST_FLOW_N6", "name": "N6断面流量实测站", "unit": "m3/s" }
+          {
+            "id": "ST_FLOW_N1",
+            "name": "N1断面流量实测站",
+            "notes": "普通断面：节点输出实测/演进用 flow_station_id"
+          },
+          {
+            "id": "ST_FLOW_N2",
+            "name": "N2断面流量实测站"
+          },
+          {
+            "id": "ST_FLOW_N4",
+            "name": "N4断面流量实测站"
+          },
+          {
+            "id": "ST_FLOW_N5",
+            "name": "N5断面流量实测站"
+          },
+          {
+            "id": "ST_FLOW_N6",
+            "name": "N6断面流量实测站"
+          }
         ],
         "stage_stations": [
-          { "id": "ST_LEVEL_N1", "name": "N1断面水位实测站", "unit": "m" },
-          { "id": "ST_LEVEL_N2", "name": "N2断面水位实测站", "unit": "m" },
-          { "id": "ST_LEVEL_N4", "name": "N4断面水位实测站", "unit": "m" },
-          { "id": "ST_LEVEL_N5", "name": "N5断面水位实测站", "unit": "m" },
-          { "id": "ST_LEVEL_N6", "name": "N6断面水位实测站", "unit": "m" }
+          {
+            "id": "ST_LEVEL_N1",
+            "name": "N1断面水位实测站"
+          },
+          {
+            "id": "ST_LEVEL_N2",
+            "name": "N2断面水位实测站"
+          },
+          {
+            "id": "ST_LEVEL_N4",
+            "name": "N4断面水位实测站"
+          },
+          {
+            "id": "ST_LEVEL_N5",
+            "name": "N5断面水位实测站"
+          },
+          {
+            "id": "ST_LEVEL_N6",
+            "name": "N6断面水位实测站"
+          }
         ],
         "reservoir": [
           {
@@ -308,19 +356,16 @@
               {
                 "id": "ST_IN_N3",
                 "name": "N3水库入库流量实测站",
-                "unit": "m3/s",
                 "notes": "预报入库注入、observed_inflow 等绑定 reservoir 的 inflow_station_id"
               },
               {
                 "id": "ST_OUT_N3",
                 "name": "N3水库出库流量实测站",
-                "unit": "m3/s",
                 "notes": "实测出库演进：use_observed_for_routing 时节点输出缝合 outflow_station_id"
               },
               {
                 "id": "ST_LEVEL_N3",
-                "name": "N3水库水位实测站",
-                "unit": "m"
+                "name": "N3水库水位实测站"
               }
             ]
           }
@@ -333,14 +378,37 @@
             {
               "kind": "precipitation",
               "method": "weighted_average",
-              "stations": [{"id": "STA_A", "weight": 1.0}]
+              "stations": [
+                {
+                  "id": "STA_A",
+                  "weight": 1.0
+                }
+              ]
             },
             {
               "kind": "potential_evapotranspiration",
               "method": "weighted_average",
-              "stations": [{"id": "PET_STA_A", "weight": 1.0}],
+              "stations": [
+                {
+                  "id": "PET_STA_A",
+                  "weight": 1.0
+                }
+              ],
               "use_station_pet": true,
-              "monthly_values": [3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0]
+              "monthly_values": [
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0,
+                3.0
+              ]
             }
           ]
         },
@@ -350,7 +418,12 @@
             {
               "kind": "precipitation",
               "method": "weighted_average",
-              "stations": [{"id": "STA_B", "weight": 1.0}]
+              "stations": [
+                {
+                  "id": "STA_B",
+                  "weight": 1.0
+                }
+              ]
             }
           ]
         }
